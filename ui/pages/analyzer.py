@@ -15,10 +15,27 @@ from ui import charts, components, premium, state
 from ui.styles import ANALYZER_CSS
 
 
+def _stash_uploads(uploads: list) -> Path:
+    """Persist uploaded files into a per-session temp dir so the normal
+    folder-based analysis (and audio preview) can work on them."""
+    import tempfile
+
+    if "upload_dir" not in st.session_state:
+        st.session_state["upload_dir"] = tempfile.mkdtemp(prefix="ta_uploads_")
+    upload_dir = Path(st.session_state["upload_dir"])
+    for uploaded in uploads:
+        (upload_dir / Path(uploaded.name).name).write_bytes(uploaded.getbuffer())
+    return upload_dir
+
+
 def run_analysis_flow(config: dict) -> None:
-    folder = config["folder"]
+    if config.get("uploads"):
+        folder = _stash_uploads(config["uploads"])
+        config = {**config, "recursive": False}
+    else:
+        folder = config["folder"]
     if not folder or not folder.is_dir():
-        st.session_state.last_error = "Please select a valid music folder."
+        st.session_state.last_error = "Choose a music folder or upload some tracks first."
         st.session_state.tracks = None
         return
 

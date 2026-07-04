@@ -3,14 +3,18 @@ playlist editor, metrics, and the track inspector."""
 
 from __future__ import annotations
 
-import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog
 
 import pandas as pd
 import streamlit as st
 
-from harmonic_playlist import CAMELOT_MAJOR, CAMELOT_MINOR, find_audio_files, key_to_camelot
+from harmonic_playlist import (
+    AUDIO_EXTENSIONS,
+    CAMELOT_MAJOR,
+    CAMELOT_MINOR,
+    find_audio_files,
+    key_to_camelot,
+)
 
 from . import state
 
@@ -29,13 +33,32 @@ _WEIGHT_LABELS = {
 }
 
 
+def folder_picker_available() -> bool:
+    """Native folder dialogs need Tkinter + a display — absent on cloud hosts.
+    Import lazily so a headless server never crashes at import time."""
+    if "_tk_available" not in st.session_state:
+        try:
+            import tkinter  # noqa: F401
+
+            st.session_state["_tk_available"] = True
+        except Exception:  # noqa: BLE001 - no tkinter / no display
+            st.session_state["_tk_available"] = False
+    return st.session_state["_tk_available"]
+
+
 def pick_folder(title: str = "Select a folder") -> str:
-    root = tk.Tk()
-    root.withdraw()
-    root.wm_attributes("-topmost", True)
-    folder = filedialog.askdirectory(title=title)
-    root.destroy()
-    return folder or ""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+
+        root = tk.Tk()
+        root.withdraw()
+        root.wm_attributes("-topmost", True)
+        folder = filedialog.askdirectory(title=title)
+        root.destroy()
+        return folder or ""
+    except Exception:  # noqa: BLE001 - headless environment
+        return ""
 
 
 def camelot_class(camelot: str | None) -> str:
@@ -297,45 +320,52 @@ def render_setup_panel() -> dict:
     )
 
     with st.container(border=True):
-        folder_col, browse_col = st.columns([4, 1], vertical_alignment="bottom")
-        with folder_col:
-            st.text_input("Music folder", key="music_folder", placeholder=r"C:\Music\DJ Set")
-        with browse_col:
-            if st.button("Browse", width="stretch"):
-                selected = pick_folder("Select your music folder")
-                if selected:
-                    st.session_state.pending_music_folder = selected
-                    st.rerun()
+        folder_tab, upload_tab = st.tabs(["📁 Local folder", "⬆️ Upload tracks"])
 
-        opts_col, sub_col = st.columns([2, 1], vertical_alignment="center")
-        with opts_col:
-            duration_mode = st.selectbox("Analysis length", list(DURATION_OPTIONS.keys()), index=0)
-        with sub_col:
+        with folder_tab:
+            if folder_picker_available():
+                folder_col, browse_col = st.columns([4, 1], vertical_alignment="bottom")
+                with browse_col:
+                    if st.button("Browse", width="stretch"):
+                        selected = pick_folder("Select your music folder")
+                        if selected:
+                            st.session_state.pending_music_folder = selected
+                            st.rerun()
+            else:
+                (folder_col,) = st.columns(1)
+            with folder_col:
+                st.text_input("Music folder", key="music_folder", placeholder=r"C:\Music\DJ Set")
             st.toggle("Include subfolders", key="recursive")
+
+        with upload_tab:
+            uploads = st.file_uploader(
+                "Drop audio files here",
+                type=[ext.lstrip(".") for ext in sorted(AUDIO_EXTENSIONS)],
+                accept_multiple_files=True,
+                key="uploads",
+                help="Uploaded tracks are analyzed from a temporary folder for this session.",
+            )
+            if uploads:
+                st.caption(f"⬆️ {len(uploads)} file(s) ready — uploads take priority over the folder.")
+
+        duration_mode = st.selectbox("Analysis length", list(DURATION_OPTIONS.keys()), index=0)
 
         output_default = st.session_state.music_folder or str(Path.cwd() / "output")
         if not st.session_state.output_folder:
             st.session_state.output_folder = output_default
         with st.expander("Output folder (optional)"):
-            out_col, out_browse = st.columns([4, 1], vertical_alignment="bottom")
-            with out_col:
-                st.text_input("Output folder", key="output_folder", placeholder=output_default)
-            with out_browse:
-                if st.button("Browse ", width="stretch"):
-                    selected = pick_folder("Select output folder")
-                    if selected:
-                        st.session_state.pending_output_folder = selected
-                        st.rerun()
+            st.text_input("Output folder", key="output_folder", placeholder=output_default)
 
         run_clicked = st.button("⚡ Analyze & Build Playlist", type="primary", width="stretch")
 
     folder = Path(st.session_state.music_folder) if st.session_state.music_folder else None
     count = folder_audio_count(folder, st.session_state.recursive)
-    if count:
+    if count and not uploads:
         st.caption(f"✅ Found {count} audio files ready to analyze.")
 
     return {
         "folder": folder,
+        "uploads": uploads or [],
         "output": Path(st.session_state.output_folder) if st.session_state.output_folder else Path("output"),
         "duration": DURATION_OPTIONS[duration_mode],
         "recursive": st.session_state.recursive,
