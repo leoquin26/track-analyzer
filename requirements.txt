@@ -1,0 +1,9 @@
+librosa>=0.10.0
+numpy>=1.24.0
+pandas>=2.0.0
+soundfile>=0.12.0
+audioread>=3.0.0
+streamlit>=1.58.0
+plotly>=5.18.0
+starlette>=0.45.0
+mutagen>=1.47.0

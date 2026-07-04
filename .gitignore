@@ -1,0 +1,18 @@
+# Secrets — never commit API keys (Gumroad, Last.fm, GetSongBPM)
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+
+# Generated audio + analysis outputs (regenerate with generate_test_tracks.py)
+test_tracks/
+test_output/
+demo_tracks/
+output/
+
+# Personal analysis results
+Final analyzis/
+
+# License cache lives in ~/.track_analyzer/, not here — listed defensively
+license.json
