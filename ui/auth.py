@@ -1,0 +1,205 @@
+"""User accounts, roles and plan entitlements.
+
+Self-contained for the Streamlit phase: SQLite in the user's home, scrypt
+password hashing, session kept in ``st.session_state``. Roles are elevated by
+linking a Gumroad license (membership → pro, one-off → lifetime). The public
+surface (``current_user``, ``entitled``, ``ROLE_LABELS``) is what the rest of
+the UI depends on — swapping this module for Supabase later shouldn't ripple.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import os
+import re
+import sqlite3
+import time
+from pathlib import Path
+
+import streamlit as st
+
+DB_PATH = Path.home() / ".keyflow" / "keyflow.db"
+
+ROLES = ("free", "pro", "lifetime")
+ROLE_LABELS = {"free": "Free", "pro": "Pro", "lifetime": "Lifetime"}
+
+# Single source of truth for what each plan can do.
+ENTITLEMENTS = {
+    "free":     {"max_tracks": 50,   "energy_curve": False, "discover": False, "dj_export": False},
+    "pro":      {"max_tracks": None, "energy_curve": True,  "discover": True,  "dj_export": True},
+    "lifetime": {"max_tracks": None, "energy_curve": True,  "discover": True,  "dj_export": True},
+}
+
+_RECHECK_INTERVAL = 7 * 86400  # re-verify Pro subscriptions weekly
+
+
+# --------------------------------------------------------------------------- #
+# Storage
+# --------------------------------------------------------------------------- #
+
+def _connect() -> sqlite3.Connection:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            pw_hash TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'free',
+            license_key TEXT,
+            license_checked_at REAL DEFAULT 0,
+            created_at REAL NOT NULL
+        )"""
+    )
+    return conn
+
+
+def _hash_password(password: str, salt: bytes | None = None) -> str:
+    salt = salt or os.urandom(16)
+    digest = hashlib.scrypt(password.encode(), salt=salt, n=16384, r=8, p=1)
+    return f"{salt.hex()}${digest.hex()}"
+
+
+def _verify_password(password: str, stored: str) -> bool:
+    try:
+        salt_hex, digest_hex = stored.split("$")
+        candidate = hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt_hex),
+                                   n=16384, r=8, p=1)
+        return hmac.compare_digest(candidate.hex(), digest_hex)
+    except Exception:  # noqa: BLE001 - malformed record = no access
+        return False
+
+
+def _row_to_user(row: sqlite3.Row) -> dict:
+    return {"id": row["id"], "email": row["email"], "name": row["name"],
+            "role": row["role"] if row["role"] in ROLES else "free"}
+
+
+# --------------------------------------------------------------------------- #
+# Registration / login
+# --------------------------------------------------------------------------- #
+
+def register(email: str, name: str, password: str) -> tuple[dict | None, str]:
+    """Create an account. Returns (user, "") or (None, error_message)."""
+    email = email.strip().lower()
+    name = name.strip()
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return None, "That doesn't look like a valid email."
+    if not name:
+        return None, "Tell us your (DJ) name."
+    if len(password) < 8:
+        return None, "Password needs at least 8 characters."
+
+    with _connect() as conn:
+        try:
+            conn.execute(
+                "INSERT INTO users (email, name, pw_hash, created_at) VALUES (?,?,?,?)",
+                (email, name, _hash_password(password), time.time()),
+            )
+        except sqlite3.IntegrityError:
+            return None, "There's already an account with that email — sign in instead."
+        row = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+    return _row_to_user(row), ""
+
+
+def login(email: str, password: str) -> tuple[dict | None, str]:
+    email = email.strip().lower()
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+    if not row or not _verify_password(password, row["pw_hash"]):
+        return None, "Email or password doesn't match."
+    user = _row_to_user(row)
+    user = _maybe_recheck_subscription(user, row)
+    return user, ""
+
+
+def current_user() -> dict | None:
+    return st.session_state.get("auth_user")
+
+
+def sign_in_session(user: dict) -> None:
+    st.session_state["auth_user"] = user
+
+
+def sign_out() -> None:
+    st.session_state["auth_user"] = None
+
+
+# --------------------------------------------------------------------------- #
+# Roles + entitlements
+# --------------------------------------------------------------------------- #
+
+def role() -> str:
+    user = current_user()
+    return user["role"] if user else "free"
+
+
+def entitled(capability: str):
+    """Value of a capability for the signed-in user's plan (bool or limit)."""
+    return ENTITLEMENTS[role()].get(capability)
+
+
+def set_role(user_id: int, new_role: str, license_key: str | None = None) -> None:
+    assert new_role in ROLES
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE users SET role=?, license_key=COALESCE(?, license_key),"
+            " license_checked_at=? WHERE id=?",
+            (new_role, license_key, time.time(), user_id),
+        )
+    user = st.session_state.get("auth_user")
+    if user and user["id"] == user_id:
+        user["role"] = new_role
+
+
+# --------------------------------------------------------------------------- #
+# Gumroad license linking (membership -> pro, one-off -> lifetime)
+# --------------------------------------------------------------------------- #
+
+def link_license(user: dict, key: str) -> tuple[str, str]:
+    """Verify a Gumroad key against both products and upgrade the account.
+
+    Returns (status, message): status in {"ok", "invalid", "unreachable"}.
+    """
+    from ui import premium, state
+
+    lifetime_product = state.get_secret("gumroad_lifetime_product_id",
+                                        "TA_GUMROAD_LIFETIME_PRODUCT_ID")
+    checks = [("pro", None)]  # None -> premium's default (membership) product id
+    if lifetime_product:
+        checks.insert(0, ("lifetime", lifetime_product))
+
+    saw_unreachable = False
+    for target_role, product in checks:
+        status, _data = premium.verify_license(key, product_id=product)
+        if status == "valid":
+            set_role(user["id"], target_role, license_key=key.strip())
+            return "ok", f"License linked — you're on {ROLE_LABELS[target_role]} now."
+        if status == "unreachable":
+            saw_unreachable = True
+
+    if saw_unreachable:
+        return "unreachable", "Couldn't reach Gumroad to verify — try again in a minute."
+    return "invalid", "That key isn't valid for any Keyflow product."
+
+
+def _maybe_recheck_subscription(user: dict, row: sqlite3.Row) -> dict:
+    """Weekly re-check of Pro subscriptions on login. Lifetime never expires;
+    an unreachable verifier never downgrades — only an authoritative invalid."""
+    if user["role"] != "pro" or not row["license_key"]:
+        return user
+    if time.time() - (row["license_checked_at"] or 0) < _RECHECK_INTERVAL:
+        return user
+
+    from ui import premium
+
+    status, _ = premium.verify_license(row["license_key"])
+    if status == "invalid":
+        set_role(user["id"], "free")
+        user["role"] = "free"
+    elif status == "valid":
+        set_role(user["id"], "pro", license_key=row["license_key"])
+    return user

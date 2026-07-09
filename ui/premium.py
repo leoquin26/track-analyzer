@@ -45,15 +45,15 @@ def product_url() -> str:
     return _secret("gumroad_product_url", "TA_GUMROAD_PRODUCT_URL")
 
 
-def verify_license(key: str | None) -> tuple[str, dict | None]:
-    """Verify a Gumroad license key.
+def verify_license(key: str | None, product_id: str | None = None) -> tuple[str, dict | None]:
+    """Verify a Gumroad license key against a product (default: the membership).
 
     Returns ("valid", data) | ("invalid", None) | ("unreachable", None).
     "unreachable" (network/config problem) must never revoke a cached license.
     """
     if not key:
         return ("invalid", None)
-    product = _product_id()
+    product = product_id or _product_id()
     if not product:
         return ("unreachable", None)  # misconfigured, not the buyer's fault
 
@@ -98,27 +98,10 @@ def save_record(record: dict) -> None:
 
 
 def is_premium() -> bool:
-    if "_premium" in st.session_state:
-        return st.session_state["_premium"]
+    """Plan-based: DJ exports belong to Pro and Lifetime accounts."""
+    from ui import auth
 
-    record = load_record()
-    premium = False
-    name = None
-    if record and record.get("key"):
-        premium = True  # trust the cached grant
-        name = record.get("name")
-        if time.time() - record.get("verified_at", 0) > _RECHECK_INTERVAL:
-            status, data = verify_license(record["key"])
-            if status == "invalid":       # only an authoritative "no" revokes
-                premium = False
-            elif status == "valid":
-                record.update(name=data["name"], verified_at=time.time())
-                save_record(record)
-                name = data["name"]
-
-    st.session_state["_premium"] = premium
-    st.session_state["_premium_name"] = name
-    return premium
+    return bool(auth.entitled("dj_export"))
 
 
 def render_unlock() -> None:
@@ -150,13 +133,19 @@ def render_premium_export_section(frames: dict, tracks: list[dict]) -> None:
     )
 
     if not is_premium():
+        from ui import state
+
         with st.container(border=True):
             st.markdown(
-                "**Premium** — export straight to **rekordbox**, **Serato**, and "
+                "**Pro feature** — export straight to **rekordbox**, **Serato**, and "
                 "**Traktor**, and write detected **key + BPM into your files' tags** so "
                 "your DJ software reads them."
             )
-            render_unlock()
+            url = product_url()
+            if url:
+                st.link_button("Upgrade to Pro", url, type="primary", width="stretch")
+            st.button("Already bought? Link your license in Account →", width="stretch",
+                      key="prem_to_account", on_click=state.goto_module, args=("Account",))
         return
 
     import dj_export as dx

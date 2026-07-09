@@ -17,6 +17,12 @@
   `track_suggest.py`) **no importa Streamlit** → se porta directo a FastAPI.
 
 ## Hecho recientemente (UI)
+- **Cuentas + roles free/pro/lifetime** (`ui/auth.py`): registro/login (SQLite
+  local + scrypt), gate de login en el analyzer, módulo Account (perfil, plan,
+  upgrade, vincular licencia Gumroad → pro/lifetime, re-check semanal de Pro),
+  y restricciones aplicadas: free = 50 tracks/análisis, sin plateau, sin
+  Discover, sin exports DJ. `auth.ENTITLEMENTS` es la fuente única de límites.
+  Migra a Supabase en Fase SaaS 2 (la superficie pública del módulo se mantiene).
 - **Sistema visual v2 (suave/amigable)**: tipografía Outfit (display) + Inter
   (cuerpo) + DM Mono (datos); paleta dark cálida (#121016, tinta marfil) con
   acento menta #5eead4 y lavanda #a78bfa de apoyo (tema nativo en

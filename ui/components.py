@@ -235,6 +235,17 @@ def render_sidebar_nav(modules: list[str], active: str) -> None:
             )
 
         st.markdown('<div class="sb-section">App</div>', unsafe_allow_html=True)
+        from ui import auth
+
+        user = auth.current_user()
+        if user:
+            st.markdown(
+                f'<div class="sb-status">{user["name"]}<br>'
+                f'<b>{auth.ROLE_LABELS[user["role"]]}</b> plan</div>',
+                unsafe_allow_html=True,
+            )
+        st.button("Account", key="nv_Account", width="stretch",
+                  on_click=state.goto_module, args=("Account",))
         if st.button("← Home page", key="nav_home", width="stretch"):
             st.switch_page(st.session_state["_home_page"])
 
@@ -443,11 +454,17 @@ def render_control_bar() -> None:
             st.selectbox("Start track", ["Auto"] + titles, key="start_title")
 
         with curve_col:
-            st.segmented_control(
-                "Energy curve", options=["build_up", "plateau"],
-                format_func=lambda v: {"build_up": "Build-up", "plateau": "Plateau"}[v],
-                key="energy_curve",
-            )
+            from ui import auth
+
+            if auth.entitled("energy_curve"):
+                st.segmented_control(
+                    "Energy curve", options=["build_up", "plateau"],
+                    format_func=lambda v: {"build_up": "Build-up", "plateau": "Plateau"}[v],
+                    key="energy_curve",
+                )
+            else:
+                st.session_state.energy_curve = "build_up"
+                st.caption("Energy curve: Build-up · **Plateau is Pro**")
 
         with excl_col:
             with st.popover(f"Exclude ({len(st.session_state.exclude)})", width="stretch"):

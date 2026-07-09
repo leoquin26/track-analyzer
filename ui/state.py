@@ -42,6 +42,7 @@ def init_session_state() -> None:
         "energy_curve": "build_up",
         "recursive": False,
         "an_module": "Overview",  # plain session var (no widget key) — safe to write
+        "auth_user": None,        # signed-in account (ui/auth.py)
         # Canonical scoring weights. Deliberately a plain dict, NOT widget keys:
         # popover slider state can be dropped by the frontend on a rerun while the
         # popover is closed, so widget keys alone are not a safe store.
@@ -68,8 +69,11 @@ def analyze_folder(
     duration: float | None,
     recursive: bool,
     progress_callback: Callable[[str, int, int], None] | None = None,
+    limit: int | None = None,
 ) -> tuple[list[dict], list[str], int]:
     audio_files = find_audio_files(folder, recursive)
+    if limit is not None:
+        audio_files = audio_files[:limit]
     total = len(audio_files)
     tracks: list[dict] = []
     failed: list[str] = []

@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from ui import charts, components, premium, state
+from ui import auth, charts, components, premium, state
 from ui.styles import ANALYZER_CSS
 
 
@@ -39,6 +39,24 @@ def run_analysis_flow(config: dict) -> None:
         st.session_state.tracks = None
         return
 
+    # Plan limit: Free analyzes the first N tracks of a crate.
+    max_tracks = auth.entitled("max_tracks")
+    if max_tracks is not None:
+        from harmonic_playlist import find_audio_files
+
+        found = len(find_audio_files(folder, config["recursive"]))
+        if found > max_tracks:
+            st.warning(
+                f"Your **Free** plan analyzes up to **{max_tracks} tracks** per crate — "
+                f"this folder has {found}, so only the first {max_tracks} will be read. "
+                f"Upgrade to Pro for unlimited tracks."
+            )
+            st.session_state["_track_cap"] = max_tracks
+        else:
+            st.session_state["_track_cap"] = None
+    else:
+        st.session_state["_track_cap"] = None
+
     st.session_state.last_error = ""
     progress = st.progress(0.0, text="Starting analysis…")
     status = st.empty()
@@ -49,7 +67,8 @@ def run_analysis_flow(config: dict) -> None:
 
     with st.spinner("Analyzing tracks…"):
         tracks, failed, total = state.analyze_folder(
-            folder, config["duration"], config["recursive"], on_progress
+            folder, config["duration"], config["recursive"], on_progress,
+            limit=st.session_state.get("_track_cap"),
         )
 
     progress.empty()
@@ -161,10 +180,10 @@ def render_downloads(frames: dict) -> None:
                 st.error(f"Could not save: {error}")
 
 
-MODULES = ["Overview", "Analyze", "Set builder", "Inspector", "Discover", "Insights", "Data", "Export"]
+MODULES = ["Overview", "Analyze", "Set builder", "Inspector", "Discover", "Insights", "Data", "Export", "Account"]
 
 # Modules that need an analysis before they have anything to show.
-DATA_MODULES = MODULES[2:]
+DATA_MODULES = MODULES[2:8]
 
 MODULE_DESCRIPTIONS = {
     "Overview": "Your workspace at a glance — library metrics and where to go next.",
@@ -174,8 +193,100 @@ MODULE_DESCRIPTIONS = {
     "Discover": "Find new tracks similar to the ones in your set, ranked by how well they'd mix in.",
     "Insights": "The big picture: which keys you're playing in and how everything pairs up.",
     "Data": "Every number behind the set, filterable and sortable.",
-    "Export": "Take the set with you — files for any player, DJ software formats with Premium.",
+    "Export": "Take the set with you — files for any player, DJ software formats with Pro.",
+    "Account": "Your profile and plan — link a license, upgrade, or sign out.",
 }
+
+
+def _render_auth_gate() -> None:
+    """Sign-in / create-account panel shown instead of the workspace."""
+    st.markdown(
+        '<div class="setup-kicker">Welcome</div>'
+        '<h2 class="setup-title">Sign in to your workspace</h2>'
+        '<p class="setup-sub">Your plan, sets and preferences live with your account. '
+        'Creating one is free.</p>',
+        unsafe_allow_html=True,
+    )
+    tab_in, tab_up = st.tabs(["Sign in", "Create account"])
+
+    with tab_in:
+        with st.form("login_form"):
+            email = st.text_input("Email", key="li_email")
+            password = st.text_input("Password", type="password", key="li_pw")
+            if st.form_submit_button("Sign in", type="primary", width="stretch"):
+                user, error = auth.login(email, password)
+                if user:
+                    auth.sign_in_session(user)
+                    st.rerun()
+                else:
+                    st.error(error)
+
+    with tab_up:
+        with st.form("register_form"):
+            name = st.text_input("Name / DJ name", key="rg_name")
+            email = st.text_input("Email", key="rg_email")
+            password = st.text_input("Password (8+ characters)", type="password", key="rg_pw")
+            if st.form_submit_button("Create free account", type="primary", width="stretch"):
+                user, error = auth.register(email, name, password)
+                if user:
+                    auth.sign_in_session(user)
+                    st.rerun()
+                else:
+                    st.error(error)
+
+    st.caption("Free plan: up to 50 tracks per analysis, harmonic ordering, CSV + M3U export. "
+               "Pro unlocks unlimited tracks, Discover, energy curves and DJ-software exports.")
+
+
+def _module_account() -> None:
+    user = auth.current_user()
+    plan = auth.ROLE_LABELS[user["role"]]
+
+    m1, m2 = st.columns(2)
+    with m1:
+        components.render_metric("Signed in as", user["name"], user["email"])
+    with m2:
+        components.render_metric("Current plan", plan,
+                                 "everything unlocked" if user["role"] != "free"
+                                 else "50 tracks · no DJ exports")
+
+    _divider()
+    if user["role"] == "free":
+        st.markdown('<div class="section-title">Upgrade</div>', unsafe_allow_html=True)
+        st.markdown('<p class="section-hint">Buy on Gumroad, then paste the license key '
+                    'from your receipt — your account upgrades instantly.</p>',
+                    unsafe_allow_html=True)
+        pro_url = state.get_secret("gumroad_product_url", "TA_GUMROAD_PRODUCT_URL")
+        life_url = state.get_secret("gumroad_lifetime_url", "TA_GUMROAD_LIFETIME_URL")
+        c1, c2 = st.columns(2)
+        with c1:
+            if pro_url:
+                st.link_button("Go Pro — $12/month", pro_url, type="primary", width="stretch")
+            else:
+                st.caption("Set `gumroad_product_url` in secrets to enable Pro checkout.")
+        with c2:
+            if life_url:
+                st.link_button("Lifetime — $149 once", life_url, width="stretch")
+            else:
+                st.caption("Set `gumroad_lifetime_url` in secrets to enable Lifetime checkout.")
+
+    st.markdown('<div class="section-title">License</div>', unsafe_allow_html=True)
+    key = st.text_input("License key", key="acct_license",
+                        placeholder="XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX")
+    if st.button("Link license to this account", width="stretch", key="acct_link"):
+        status, message = auth.link_license(user, key)
+        if status == "ok":
+            st.success(message)
+            st.rerun()
+        elif status == "unreachable":
+            st.warning(message)
+        else:
+            st.error(message)
+
+    _divider()
+    if st.button("Sign out", key="acct_signout"):
+        auth.sign_out()
+        st.rerun()
 
 
 def _module_card(title: str, desc: str, key: str, locked: bool = False) -> None:
@@ -352,7 +463,25 @@ def _module_inspector(frames: dict) -> None:
     components.render_track_inspector(frames["matrix_df"])
 
 
+def _render_pro_gate(feature: str) -> None:
+    with st.container(border=True):
+        st.markdown(f"**{feature}** is a **Pro** feature. Upgrade to unlock it — "
+                    "or link an existing license in Account.")
+        c1, c2, _ = st.columns([1, 1.4, 1.6])
+        with c1:
+            url = state.get_secret("gumroad_product_url", "TA_GUMROAD_PRODUCT_URL")
+            if url:
+                st.link_button("Go Pro", url, type="primary", width="stretch")
+        with c2:
+            st.button("Open Account →", key=f"gate_{feature}", width="stretch",
+                      on_click=state.goto_module, args=("Account",))
+
+
 def _module_discover(frames: dict) -> None:
+    if not auth.entitled("discover"):
+        _render_pro_gate("Discover")
+        return
+
     tracks = st.session_state.tracks or []
     titles = [track["title"] for track in tracks]
 
@@ -442,6 +571,10 @@ def _module_export(frames: dict, ordered: list[dict]) -> None:
 def analyzer_page() -> None:
     st.markdown(ANALYZER_CSS, unsafe_allow_html=True)
 
+    if auth.current_user() is None:
+        _render_auth_gate()
+        return
+
     module = st.session_state.get("an_module") or "Overview"
     if module not in MODULES:
         module = "Overview"
@@ -453,6 +586,9 @@ def analyzer_page() -> None:
         return
     if module == "Analyze":
         _module_analyze()
+        return
+    if module == "Account":
+        _module_account()
         return
 
     # Data modules need an analysis to exist.
