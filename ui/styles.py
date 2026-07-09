@@ -61,11 +61,93 @@ CUSTOM_CSS = f"""
         max-width: 1200px !important;
     }}
 
+    /* App rail — Linear-style cool dark grey, never pure black */
     [data-testid="stSidebar"] {{
-        background: #0b0b10;
+        background: #0d0d12;
         border-right: 1px solid var(--line);
+        min-width: 252px !important; max-width: 252px !important;
     }}
-    [data-testid="stSidebar"] .block-container {{ padding-top: 1.5rem; }}
+    [data-testid="stSidebar"] .block-container {{ padding: 1.2rem 0.8rem; }}
+    [data-testid="stSidebar"] div[data-testid="stButton"] > button,
+    [data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="secondary"] {{
+        justify-content: flex-start;
+        background: transparent !important;
+        border: 1px solid transparent !important;
+        color: var(--muted);
+        font-weight: 500;
+        padding: 0.42rem 0.85rem;
+        min-height: 2.2rem;
+        transition: color .18s ease, background .18s ease, padding-left .18s ease;
+    }}
+    [data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {{
+        color: var(--ink);
+        background: var(--surface-2) !important;
+        padding-left: 1.05rem;
+    }}
+    .sb-brand {{
+        font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.12rem;
+        color: var(--ink); letter-spacing: -0.02em;
+        display: flex; align-items: center; gap: 0.5rem;
+        padding: 0.2rem 0.85rem 0.9rem;
+    }}
+    .sb-brand .disc {{
+        width: 0.95rem; height: 0.95rem; border-radius: 50%;
+        background: conic-gradient(from 0deg, var(--accent), var(--accent-2), #f15bb5, #fee440, var(--accent));
+    }}
+    .sb-section {{
+        font-family: 'JetBrains Mono', monospace; font-size: 0.62rem;
+        letter-spacing: 0.22em; text-transform: uppercase; color: var(--faint);
+        padding: 0.9rem 0.85rem 0.35rem;
+    }}
+    .sb-status {{
+        margin: 0.9rem 0.4rem 0.4rem; padding: 0.7rem 0.8rem;
+        border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+        font-size: 0.78rem; color: var(--muted); line-height: 1.5;
+    }}
+    .sb-status b {{ color: var(--accent); font-family: 'JetBrains Mono', monospace; }}
+
+    /* Page header inside the app shell */
+    .pg-title {{
+        font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.7rem;
+        color: var(--ink); letter-spacing: -0.025em; margin: 0 0 0.15rem;
+        animation: rise .35s ease both;
+    }}
+    .pg-desc {{ color: var(--muted); margin: 0 0 1.2rem; animation: rise .4s ease both; }}
+
+    /* ------- Motion layer: purposeful, 200–450ms, reduced-motion aware ------- */
+    @keyframes rise {{
+        from {{ opacity: 0; transform: translateY(9px); }}
+        to   {{ opacity: 1; transform: translateY(0); }}
+    }}
+    .metric-card, .feature-card, .price-card, .lp-step, .lp-stat,
+    [data-testid="stVerticalBlockBorderWrapper"] {{
+        animation: rise .42s cubic-bezier(.22,.9,.35,1) both;
+    }}
+    div[data-testid="column"]:nth-of-type(2) .metric-card,
+    div[data-testid="column"]:nth-of-type(2) .feature-card,
+    div[data-testid="column"]:nth-of-type(2) [data-testid="stVerticalBlockBorderWrapper"] {{ animation-delay: .06s; }}
+    div[data-testid="column"]:nth-of-type(3) .metric-card,
+    div[data-testid="column"]:nth-of-type(3) .feature-card,
+    div[data-testid="column"]:nth-of-type(3) [data-testid="stVerticalBlockBorderWrapper"] {{ animation-delay: .12s; }}
+    div[data-testid="column"]:nth-of-type(4) .metric-card,
+    div[data-testid="column"]:nth-of-type(4) .feature-card,
+    div[data-testid="column"]:nth-of-type(4) [data-testid="stVerticalBlockBorderWrapper"] {{ animation-delay: .18s; }}
+
+    .metric-card {{ transition: transform .2s ease, border-color .2s ease; }}
+    .metric-card:hover {{ transform: translateY(-2px); border-color: rgba(0,245,212,0.3); }}
+
+    /* Sparkline draw-in */
+    .spark-line {{
+        stroke-dasharray: 520; stroke-dashoffset: 520;
+        animation: spark-draw 1s cubic-bezier(.3,.8,.3,1) .15s forwards;
+    }}
+    @keyframes spark-draw {{ to {{ stroke-dashoffset: 0; }} }}
+
+    @media (prefers-reduced-motion: reduce) {{
+        .metric-card, .feature-card, .price-card, .lp-step, .lp-stat, .pg-title, .pg-desc,
+        [data-testid="stVerticalBlockBorderWrapper"] {{ animation: none; }}
+        .spark-line {{ animation: none; stroke-dashoffset: 0; }}
+    }}
 
     /* Buttons: premium, kind-aware */
     div[data-testid="stButton"] > button,

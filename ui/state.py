@@ -41,6 +41,7 @@ def init_session_state() -> None:
         "start_title": "Auto",
         "energy_curve": "build_up",
         "recursive": False,
+        "an_module": "Overview",  # plain session var (no widget key) — safe to write
         # Canonical scoring weights. Deliberately a plain dict, NOT widget keys:
         # popover slider state can be dropped by the frontend on a rerun while the
         # popover is closed, so widget keys alone are not a safe store.

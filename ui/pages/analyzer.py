@@ -69,8 +69,28 @@ def _divider() -> None:
     st.markdown('<hr class="an-divider">', unsafe_allow_html=True)
 
 
-def render_header() -> None:
-    components.render_app_header("Analyzer")
+def render_page_header(module: str) -> None:
+    st.markdown(f'<h1 class="pg-title">{module}</h1>', unsafe_allow_html=True)
+    st.markdown(f'<p class="pg-desc">{MODULE_DESCRIPTIONS[module]}</p>', unsafe_allow_html=True)
+
+
+def _energy_sparkline(ordered: list[dict]) -> str:
+    """Inline SVG sparkline of the set's energy curve, with a draw-in animation."""
+    energies = [float(t["energy"]) for t in ordered]
+    if len(energies) < 2:
+        energies = energies * 2 or [0.0, 0.0]
+    lo, hi = min(energies), max(energies)
+    span = (hi - lo) or 1.0
+    n = len(energies)
+    pts = [(i * (220 / (n - 1)), 52 - ((e - lo) / span) * 40) for i, e in enumerate(energies)]
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    area = f"0,60 {line} 220,60"
+    return (
+        '<svg viewBox="0 0 220 60" preserveAspectRatio="none" style="width:100%;height:56px">'
+        f'<polyline points="{area}" fill="rgba(0,245,212,0.08)" stroke="none"/>'
+        f'<polyline class="spark-line" points="{line}" fill="none" stroke="#00f5d4" '
+        'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>'
+    )
 
 
 def render_status_chips(frames: dict, ordered: list[dict]) -> None:
@@ -233,6 +253,41 @@ def _module_overview() -> None:
             for failure in failed:
                 st.write(failure)
 
+    # A glance at the set itself: energy arc, key coverage, transition callouts.
+    spark_col, wheel_col, call_col = st.columns([1.2, 0.9, 1.1], gap="medium")
+    with spark_col:
+        with st.container(border=True):
+            st.markdown('<div class="metric-label">Energy arc of the set</div>',
+                        unsafe_allow_html=True)
+            st.markdown(_energy_sparkline(ordered), unsafe_allow_html=True)
+            st.caption("Opens mellow, lands loud — the build-up curve.")
+    with wheel_col:
+        with st.container(border=True):
+            st.markdown('<div class="metric-label">Key coverage</div>', unsafe_allow_html=True)
+            present = {t["camelot"] for t in ordered if t["camelot"]}
+            st.markdown(
+                f'<div class="an-wheel" style="max-width:180px;margin:0 auto">'
+                f'{charts.camelot_wheel_svg(present)}</div>',
+                unsafe_allow_html=True,
+            )
+    with call_col:
+        with st.container(border=True):
+            st.markdown('<div class="metric-label">Transition callouts</div>',
+                        unsafe_allow_html=True)
+            scores = pd.to_numeric(
+                playlist_df["transition_score_from_previous"], errors="coerce")
+            if scores.notna().any():
+                best, worst = scores.idxmax(), scores.idxmin()
+                st.markdown(
+                    f"Smoothest: **{playlist_df.loc[best - 1, 'title'] if best > 0 else '—'} → "
+                    f"{playlist_df.loc[best, 'title']}** ({scores[best]:.0f})")
+                st.markdown(
+                    f"Trickiest: **{playlist_df.loc[worst - 1, 'title'] if worst > 0 else '—'} → "
+                    f"{playlist_df.loc[worst, 'title']}** ({scores[worst]:.0f})")
+                st.caption("Rework the tricky one in Set builder or Inspector.")
+            else:
+                st.caption("Add more tracks to see transition highlights.")
+
     _divider()
     st.markdown('<div class="section-title">What next?</div>', unsafe_allow_html=True)
     st.markdown('<p class="section-hint">Each module does one job — open the one that matches '
@@ -386,13 +441,12 @@ def _module_export(frames: dict, ordered: list[dict]) -> None:
 
 def analyzer_page() -> None:
     st.markdown(ANALYZER_CSS, unsafe_allow_html=True)
-    render_header()
 
-    module = st.segmented_control(
-        "App section", options=MODULES, default="Overview", key="an_module",
-        label_visibility="collapsed", width="stretch",
-    ) or "Overview"
-    st.markdown(f'<p class="module-desc">{MODULE_DESCRIPTIONS[module]}</p>', unsafe_allow_html=True)
+    module = st.session_state.get("an_module") or "Overview"
+    if module not in MODULES:
+        module = "Overview"
+    components.render_sidebar_nav(MODULES, module)
+    render_page_header(module)
 
     if module == "Overview":
         _module_overview()

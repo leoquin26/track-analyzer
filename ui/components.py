@@ -196,19 +196,44 @@ def playlist_column_config() -> dict:
 # Metrics + playlist
 # --------------------------------------------------------------------------- #
 
-def render_app_header(section: str = "Analyzer") -> None:
-    """Persistent brand header: the orientation anchor on every page."""
-    brand, _, nav = st.columns([3, 2.4, 0.9], vertical_alignment="center")
-    with brand:
-        st.markdown(
-            f'<div class="app-brand"><span class="disc"></span>Keyflow'
-            f'<span class="crumb">/ {section}</span></div>',
-            unsafe_allow_html=True,
-        )
-    with nav:
-        if st.button("Home", key="nav_home", width="stretch"):
+def render_sidebar_nav(modules: list[str], active: str) -> None:
+    """The app rail: brand, module navigation, library status, Home."""
+    with st.sidebar:
+        st.markdown('<div class="sb-brand"><span class="disc"></span>Keyflow</div>',
+                    unsafe_allow_html=True)
+        st.markdown('<div class="sb-section">Workspace</div>', unsafe_allow_html=True)
+        for module in modules:
+            slug = module.replace(" ", "_")
+            st.button(module, key=f"nv_{slug}", width="stretch",
+                      on_click=state.goto_module, args=(module,))
+
+        tracks = st.session_state.tracks
+        if tracks:
+            st.markdown(
+                f'<div class="sb-status"><b>{len(tracks)}</b> tracks analyzed<br>'
+                f'ready to shape &amp; export</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<div class="sb-status">No analysis yet —<br>'
+                'start in <b>Analyze</b></div>',
+                unsafe_allow_html=True,
+            )
+
+        st.markdown('<div class="sb-section">App</div>', unsafe_allow_html=True)
+        if st.button("← Home page", key="nav_home", width="stretch"):
             st.switch_page(st.session_state["_home_page"])
-    st.markdown('<hr class="app-header-rule">', unsafe_allow_html=True)
+
+    # Active item: ink text + inset teal indicator, injected per run.
+    active_slug = active.replace(" ", "_")
+    st.markdown(
+        f"<style>.st-key-nv_{active_slug} button {{"
+        f"color: var(--ink) !important; background: var(--surface-2) !important;"
+        f"box-shadow: inset 2px 0 0 var(--accent);"
+        f"}}</style>",
+        unsafe_allow_html=True,
+    )
 
 
 def render_metric(label: str, value: str, sub: str = "") -> None:
