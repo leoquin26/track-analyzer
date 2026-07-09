@@ -141,16 +141,139 @@ def render_downloads(frames: dict) -> None:
                 st.error(f"Could not save: {error}")
 
 
-MODULES = ["🎼 Set builder", "🔬 Inspector", "🌐 Discover", "📊 Insights", "📋 Data", "📦 Export"]
+MODULES = ["Overview", "Analyze", "Set builder", "Inspector", "Discover", "Insights", "Data", "Export"]
+
+# Modules that need an analysis before they have anything to show.
+DATA_MODULES = MODULES[2:]
 
 MODULE_DESCRIPTIONS = {
-    "🎼 Set builder": "Your set in playing order — listen, reorder, and watch the energy flow.",
-    "🔬 Inspector": "One track under the microscope: preview it, see what it mixes into, fix its key or BPM.",
-    "🌐 Discover": "Find new tracks similar to the ones in your set, ranked by how well they'd mix in.",
-    "📊 Insights": "The big picture: which keys you're playing in and how everything pairs up.",
-    "📋 Data": "Every number behind the set, filterable and sortable.",
-    "📦 Export": "Take the set with you — files for any player, DJ software formats with Premium.",
+    "Overview": "Your workspace at a glance — library metrics and where to go next.",
+    "Analyze": "Point Keyflow at a folder (or upload tracks) and read every song's key, BPM, groove and energy.",
+    "Set builder": "Your set in playing order — listen, reorder, and watch the energy flow.",
+    "Inspector": "One track under the microscope: preview it, see what it mixes into, fix its key or BPM.",
+    "Discover": "Find new tracks similar to the ones in your set, ranked by how well they'd mix in.",
+    "Insights": "The big picture: which keys you're playing in and how everything pairs up.",
+    "Data": "Every number behind the set, filterable and sortable.",
+    "Export": "Take the set with you — files for any player, DJ software formats with Premium.",
 }
+
+
+def _module_card(title: str, desc: str, key: str, locked: bool = False) -> None:
+    with st.container(border=True):
+        cls = " ov-locked" if locked else ""
+        st.markdown(
+            f'<div class="{cls.strip()}"><p class="ov-card-title">{title}</p>'
+            f'<p class="ov-card-desc">{desc}</p></div>',
+            unsafe_allow_html=True,
+        )
+        if locked:
+            st.caption("Unlocks after your first analysis.")
+        else:
+            st.button("Open  →", key=key, width="stretch",
+                      on_click=state.goto_module, args=(title,))
+
+
+def _module_overview() -> None:
+    tracks = st.session_state.tracks
+
+    if not tracks:
+        st.markdown(
+            '<div class="setup-kicker">Welcome</div>'
+            '<h2 class="setup-title">Your harmonic mixing workspace</h2>'
+            '<p class="setup-sub">Keyflow reads your music, then helps you build a set that '
+            'flows. Everything starts with one analysis — here\'s the path:</p>'
+            '<div class="setup-steps">'
+            '<span><b>1</b> Analyze a folder or upload tracks</span>'
+            '<span><b>2</b> Shape the set — order, energy, keys</span>'
+            '<span><b>3</b> Export to your DJ software</span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        cta, _ = st.columns([1.2, 2])
+        with cta:
+            st.button("Analyze your library  →", type="primary", width="stretch",
+                      key="ov_start", on_click=state.goto_module, args=("Analyze",))
+        _divider()
+        st.markdown('<p class="section-hint">What unlocks after that first analysis:</p>',
+                    unsafe_allow_html=True)
+        for row_modules in (DATA_MODULES[:3], DATA_MODULES[3:]):
+            for col, module in zip(st.columns(3, gap="medium"), row_modules):
+                with col:
+                    _module_card(module, MODULE_DESCRIPTIONS[module], f"ovlk_{module}", locked=True)
+        return
+
+    ordered = state.ensure_order()
+    frames = state.build_result_frames(ordered)
+    analysis_df = frames["analysis_df"]
+    playlist_df = frames["playlist_df"]
+    avg_bpm = analysis_df["bpm"].mean() if not analysis_df.empty else float("nan")
+    avg_score = pd.to_numeric(
+        playlist_df["transition_score_from_previous"], errors="coerce").mean()
+
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        components.render_metric("Tracks analyzed", str(len(tracks)),
+                                 f"{st.session_state.audio_file_count} files scanned")
+    with m2:
+        components.render_metric("Average tempo",
+                                 f"{avg_bpm:.0f} BPM" if pd.notna(avg_bpm) else "—",
+                                 "the set's centre of gravity")
+    with m3:
+        components.render_metric("Keys in play",
+                                 str(analysis_df["camelot"].nunique() if not analysis_df.empty else 0),
+                                 "fewer keys = easier mixing")
+    with m4:
+        components.render_metric("Set smoothness",
+                                 f"{avg_score:.0f} / 115" if pd.notna(avg_score) else "—",
+                                 "75+ seamless · <40 tricky")
+
+    failed = st.session_state.failed_files
+    if failed:
+        with st.expander(f"{len(failed)} files could not be analyzed", expanded=False):
+            for failure in failed:
+                st.write(failure)
+
+    _divider()
+    st.markdown('<div class="section-title">What next?</div>', unsafe_allow_html=True)
+    st.markdown('<p class="section-hint">Each module does one job — open the one that matches '
+                'what you\'re trying to do.</p>', unsafe_allow_html=True)
+    for row_modules in (DATA_MODULES[:3], DATA_MODULES[3:]):
+        for col, module in zip(st.columns(3, gap="medium"), row_modules):
+            with col:
+                _module_card(module, MODULE_DESCRIPTIONS[module], f"ov_{module}")
+
+    st.caption("Working on a different crate? Run a new analysis from the **Analyze** module — "
+               "it replaces the current one.")
+
+
+def _module_analyze() -> None:
+    tracks = st.session_state.tracks
+    if tracks:
+        st.caption(f"Current analysis: **{len(tracks)} tracks**. Running a new one replaces it.")
+
+    config = components.render_setup_panel()
+    if config["run"]:
+        run_analysis_flow(config)
+    if st.session_state.last_error:
+        st.error(st.session_state.last_error)
+
+    if config["run"] and st.session_state.tracks:
+        st.success(f"Analyzed {len(st.session_state.tracks)} tracks — your set is ready.")
+        c1, c2, _ = st.columns([1.2, 1, 1.8])
+        with c1:
+            st.button("Open Set builder  →", type="primary", width="stretch",
+                      key="an_done_sb", on_click=state.goto_module, args=("Set builder",))
+        with c2:
+            st.button("See overview", width="stretch",
+                      key="an_done_ov", on_click=state.goto_module, args=("Overview",))
+
+
+def _render_locked(module: str) -> None:
+    st.info(f"**{module}** needs an analysis first — {MODULE_DESCRIPTIONS[module].lower()}")
+    cta, _ = st.columns([1.2, 2.8])
+    with cta:
+        st.button("Analyze your library  →", type="primary", width="stretch",
+                  key=f"lk_{module}", on_click=state.goto_module, args=("Analyze",))
 
 
 def _module_set_builder(frames: dict) -> None:
@@ -182,7 +305,7 @@ def _module_discover(frames: dict) -> None:
     with seed_col:
         seed = st.selectbox("Find tracks similar to", titles, key="discover_seed")
     with btn_col:
-        search = st.button("🌐 Find similar", type="primary", width="stretch")
+        search = st.button("Find similar tracks", type="primary", width="stretch")
 
     reference = next((t for t in tracks if t["title"] == seed), None)
 
@@ -202,10 +325,10 @@ def _module_discover(frames: dict) -> None:
         )
 
     if not state.get_secret("lastfm_api_key", "TA_LASTFM_API_KEY"):
-        st.caption("💡 Add a free `lastfm_api_key` in secrets for richer matches — "
+        st.caption("Tip: add a free `lastfm_api_key` in secrets for richer matches — "
                    "currently using open ListenBrainz data.")
     if not state.get_secret("getsongbpm_api_key", "TA_GETSONGBPM_KEY"):
-        st.caption("💡 Add a `getsongbpm_api_key` to see key + BPM compatibility for suggestions.")
+        st.caption("Tip: add a `getsongbpm_api_key` to see key + BPM compatibility for suggestions.")
 
 
 def _module_insights(frames: dict) -> None:
@@ -261,55 +384,46 @@ def _module_export(frames: dict, ordered: list[dict]) -> None:
     premium.render_premium_export_section(frames, ordered)
 
 
-def render_results() -> None:
-    ordered = state.ensure_order()
-    if not ordered:
-        st.warning("Every track is excluded — clear some exclusions in the control bar.")
-        return
-
-    frames = state.build_result_frames(ordered)
-
-    render_status_chips(frames, ordered)
-
-    failed = st.session_state.failed_files
-    if failed:
-        with st.expander(f"{len(failed)} files could not be analyzed", expanded=False):
-            for failure in failed:
-                st.write(failure)
-
-    module = st.segmented_control(
-        "Results section", options=MODULES, default=MODULES[0], key="an_module",
-        label_visibility="collapsed", width="stretch",
-    ) or MODULES[0]
-    st.markdown(f'<p class="module-desc">{MODULE_DESCRIPTIONS[module]}</p>', unsafe_allow_html=True)
-
-    if module == "🎼 Set builder":
-        _module_set_builder(frames)
-    elif module == "🔬 Inspector":
-        _module_inspector(frames)
-    elif module == "🌐 Discover":
-        _module_discover(frames)
-    elif module == "📊 Insights":
-        _module_insights(frames)
-    elif module == "📋 Data":
-        _module_data(frames)
-    else:
-        _module_export(frames, ordered)
-
-
 def analyzer_page() -> None:
     st.markdown(ANALYZER_CSS, unsafe_allow_html=True)
     render_header()
 
-    if st.session_state.tracks is None:
-        config = components.render_setup_panel()
-        if config["run"]:
-            run_analysis_flow(config)
-            if st.session_state.tracks is not None:
-                st.rerun()
-        if st.session_state.last_error:
-            st.error(st.session_state.last_error)
+    module = st.segmented_control(
+        "App section", options=MODULES, default="Overview", key="an_module",
+        label_visibility="collapsed", width="stretch",
+    ) or "Overview"
+    st.markdown(f'<p class="module-desc">{MODULE_DESCRIPTIONS[module]}</p>', unsafe_allow_html=True)
+
+    if module == "Overview":
+        _module_overview()
+        return
+    if module == "Analyze":
+        _module_analyze()
         return
 
+    # Data modules need an analysis to exist.
+    if st.session_state.tracks is None:
+        _render_locked(module)
+        return
+
+    ordered = state.ensure_order()
+    if not ordered:
+        st.warning("Every track is excluded — clear some exclusions in the control bar.")
+        return
+    frames = state.build_result_frames(ordered)
+
     components.render_control_bar()
-    render_results()
+    render_status_chips(frames, ordered)
+
+    if module == "Set builder":
+        _module_set_builder(frames)
+    elif module == "Inspector":
+        _module_inspector(frames)
+    elif module == "Discover":
+        _module_discover(frames)
+    elif module == "Insights":
+        _module_insights(frames)
+    elif module == "Data":
+        _module_data(frames)
+    else:
+        _module_export(frames, ordered)

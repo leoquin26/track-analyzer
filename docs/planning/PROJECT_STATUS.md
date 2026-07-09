@@ -17,6 +17,13 @@
   `track_suggest.py`) **no importa Streamlit** → se porta directo a FastAPI.
 
 ## Hecho recientemente (UI)
+- **Analyzer reestructurado como dashboard**: módulo **Overview** por defecto
+  (bienvenida guiada + cards bloqueadas sin análisis; métricas + "What next?"
+  con análisis), **Analyze** como módulo propio, y los demás módulos con gating
+  y CTA. Navegación por `state.goto_module` (callback).
+- **Pulido de diseño**: emojis eliminados de toda la UI (iconos SVG hairline en
+  las feature cards), CTAs de pricing alineados a una línea base, botones ▲▼
+  compactos, vocabulario unificado ("Open Keyflow →").
 - **Rebranding a Keyflow** (dominio elegido: `keyflow.dj`, sin registrar aún;
   tagline "Sets that flow in key."). Marca aplicada en landing, analyzer,
   exports (rekordbox/Traktor/M3U), user-agent de Discover y README. La ruta de

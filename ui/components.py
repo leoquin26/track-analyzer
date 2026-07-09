@@ -82,7 +82,7 @@ def folder_audio_count(folder: Path | None, recursive: bool) -> int:
 # --------------------------------------------------------------------------- #
 
 def render_metrics_guide() -> None:
-    with st.popover("📖 Guide", width="stretch", help="What do all these numbers mean?"):
+    with st.popover("Guide", width="stretch", help="What do all these numbers mean?"):
         st.markdown(
             """
 **Every track**
@@ -206,7 +206,7 @@ def render_app_header(section: str = "Analyzer") -> None:
             unsafe_allow_html=True,
         )
     with nav:
-        if st.button("🏠 Home", key="nav_home", width="stretch"):
+        if st.button("Home", key="nav_home", width="stretch"):
             st.switch_page(st.session_state["_home_page"])
     st.markdown('<hr class="app-header-rule">', unsafe_allow_html=True)
 
@@ -320,7 +320,7 @@ def render_setup_panel() -> dict:
     )
 
     with st.container(border=True):
-        folder_tab, upload_tab = st.tabs(["📁 Local folder", "⬆️ Upload tracks"])
+        folder_tab, upload_tab = st.tabs(["Local folder", "Upload tracks"])
 
         with folder_tab:
             if folder_picker_available():
@@ -346,7 +346,7 @@ def render_setup_panel() -> dict:
                 help="Uploaded tracks are analyzed from a temporary folder for this session.",
             )
             if uploads:
-                st.caption(f"⬆️ {len(uploads)} file(s) ready — uploads take priority over the folder.")
+                st.caption(f"{len(uploads)} file(s) ready — uploads take priority over the folder.")
 
         duration_mode = st.selectbox("Analysis length", list(DURATION_OPTIONS.keys()), index=0)
 
@@ -356,7 +356,7 @@ def render_setup_panel() -> dict:
         with st.expander("Output folder (optional)"):
             st.text_input("Output folder", key="output_folder", placeholder=output_default)
 
-        run_clicked = st.button("⚡ Analyze & Build Playlist", type="primary", width="stretch")
+        run_clicked = st.button("Analyze & build set", type="primary", width="stretch")
 
     folder = Path(st.session_state.music_folder) if st.session_state.music_folder else None
     count = folder_audio_count(folder, st.session_state.recursive)
@@ -395,9 +395,8 @@ def render_control_bar() -> None:
         )
 
         with new_col:
-            if st.button("🔄 New folder", width="stretch", help="Analyze a different folder"):
-                st.session_state.tracks = None
-                st.rerun()
+            st.button("New analysis", width="stretch", help="Analyze a different folder or new uploads",
+                      on_click=state.goto_module, args=("Analyze",))
 
         with start_col:
             st.selectbox("Start track", ["Auto"] + titles, key="start_title")
@@ -410,11 +409,11 @@ def render_control_bar() -> None:
             )
 
         with excl_col:
-            with st.popover(f"🚫 Exclude ({len(st.session_state.exclude)})", width="stretch"):
+            with st.popover(f"Exclude ({len(st.session_state.exclude)})", width="stretch"):
                 st.multiselect("Drop tracks from the set", titles, key="exclude")
 
         with wts_col:
-            with st.popover("🎚 Weights", width="stretch"):
+            with st.popover("Weights", width="stretch"):
                 st.caption("Emphasize what matters for your mix.")
                 store = st.session_state.weights
                 for key, label in _WEIGHT_LABELS.items():

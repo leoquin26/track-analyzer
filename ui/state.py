@@ -162,6 +162,12 @@ def move_track(index: int, delta: int) -> None:
     order[index], order[target] = order[target], order[index]
 
 
+def goto_module(module: str) -> None:
+    """Navigate the analyzer's module switcher. Only safe as an ``on_click``
+    callback — widget keys can't be written mid-script."""
+    st.session_state["an_module"] = module
+
+
 def invalidate_order() -> None:
     """Force ensure_order() to regenerate on the next run (after a data change)."""
     st.session_state._order_sig = None

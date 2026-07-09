@@ -365,12 +365,14 @@ HOME_CSS = f"""
     .lp-lead {{ color: var(--muted); font-size: 1.02rem; max-width: 38rem; margin: 0.4rem 0 0; line-height: 1.6; }}
 
     .feature-card {{
-        height: 100%; background: var(--surface); border: 1px solid var(--line);
+        height: 100%; min-height: 252px;
+        background: var(--surface); border: 1px solid var(--line);
         border-radius: 18px; padding: 1.5rem 1.35rem;
         transition: transform 0.16s ease, border-color 0.16s ease;
     }}
     .feature-card:hover {{ transform: translateY(-3px); border-color: rgba(0,245,212,0.3); }}
-    .feature-icon {{ font-size: 1.5rem; opacity: 0.95; }}
+    .feature-icon {{ color: var(--accent); }}
+    .feature-icon svg {{ width: 26px; height: 26px; display: block; }}
     .feature-card h4 {{ color: var(--ink); margin: 0.7rem 0 0.4rem; font-size: 1.04rem; font-weight: 600; }}
     .feature-card p {{ color: var(--muted); font-size: 0.9rem; margin: 0; line-height: 1.55; }}
 
@@ -416,6 +418,7 @@ HOME_CSS = f"""
     .price-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 0.4rem; }}
     .price-card {{
         display: flex; flex-direction: column; height: 100%;
+        min-height: 474px;  /* taller than the featured card -> the three CTAs share a baseline */
         background: var(--surface); border: 1px solid var(--line);
         border-radius: 18px; padding: 1.6rem 1.4rem;
     }}
@@ -555,5 +558,24 @@ ANALYZER_CSS = f"""
         padding: 0.15rem 0.5rem; border-radius: 999px; color: #08080b;
         background: var(--accent);
     }}
+
+    /* Compact ▲▼ reorder buttons so they don't compete with the track cards. */
+    div[class*="st-key-up_"] button, div[class*="st-key-down_"] button {{
+        padding: 0.12rem 0.4rem !important;
+        min-height: 1.7rem !important;
+        font-size: 0.72rem !important;
+        border-radius: 8px !important;
+    }}
+
+    /* Overview action cards */
+    .ov-card-title {{
+        font-family: 'Space Grotesk', sans-serif; font-weight: 600;
+        font-size: 1.02rem; color: var(--ink); margin: 0 0 0.25rem;
+    }}
+    .ov-card-desc {{
+        color: var(--muted); font-size: 0.86rem; line-height: 1.5;
+        margin: 0 0 0.8rem; min-height: 2.6rem;
+    }}
+    .ov-locked {{ opacity: 0.55; }}
 </style>
 """

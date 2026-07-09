@@ -13,11 +13,24 @@ import streamlit as st
 from ui.charts import camelot_wheel_svg
 from ui.styles import HOME_CSS
 
+# Monochrome hairline icons (stroke = currentColor -> teal via .feature-icon).
+_SVG = {
+    "keys": ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">'
+             '<rect x="3" y="4" width="18" height="16" rx="2"/>'
+             '<path d="M8 4v10M16 4v10M12 4v7"/></svg>'),
+    "groove": ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">'
+               '<path d="M3 12v.01M7 8v8M11 5v14M15 9v6M21 12v.01M19 10v4"/></svg>'),
+    "energy": ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">'
+               '<path d="M3 17c3-1 4-6 7-6s4 4 7 3 4-6 4-6"/><circle cx="3" cy="17" r="1.2"/></svg>'),
+    "control": ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">'
+                '<path d="M4 8h16M4 16h16"/><circle cx="9" cy="8" r="2.2"/><circle cx="15" cy="16" r="2.2"/></svg>'),
+}
+
 _FEATURES = [
-    ("🎹", "Harmonic keys", "Every track gets a musical key and Camelot code, so blends stay in tune instead of clashing."),
-    ("🥁", "Groove match", "A rhythm fingerprint and onset density line up tracks that actually feel alike, not just share a key."),
-    ("⚡", "Energy flow", "Order the set as a build-up or a plateau, and reshape it live — no re-analysis."),
-    ("🎛️", "Live control", "Weight what matters for your mix and reorder by hand; the set updates the moment you change it."),
+    (_SVG["keys"], "Harmonic keys", "Every track gets a musical key and Camelot code, so blends stay in tune instead of clashing."),
+    (_SVG["groove"], "Groove match", "A rhythm fingerprint and onset density line up tracks that actually feel alike, not just share a key."),
+    (_SVG["energy"], "Energy flow", "Order the set as a build-up or a plateau, and reshape it live — no re-analysis."),
+    (_SVG["control"], "Live control", "Weight what matters for your mix and reorder by hand; the set updates the moment you change it."),
 ]
 
 _STEPS = [
@@ -48,7 +61,7 @@ _PLANS = [
 ]
 
 
-def _launch(key: str, label: str = "Launch Analyzer  →", kind: str = "primary") -> None:
+def _launch(key: str, label: str = "Open Keyflow  →", kind: str = "primary") -> None:
     if st.button(label, type=kind, key=key, width="stretch"):
         st.switch_page(st.session_state["_analyzer_page"])
 
@@ -70,7 +83,7 @@ def _navbar() -> None:
             unsafe_allow_html=True,
         )
     with cta:
-        _launch("nav_launch", "Open app  →")
+        _launch("nav_launch", "Open Keyflow  →")
 
 
 def _hero() -> None:

@@ -124,7 +124,7 @@ def is_premium() -> bool:
 def render_unlock() -> None:
     url = product_url()
     if url:
-        st.link_button("💳  Buy Premium on Gumroad", url, width="stretch")
+        st.link_button("Buy Premium on Gumroad", url, width="stretch")
     else:
         st.caption("Set `gumroad_product_url` + `gumroad_product_id` in secrets to enable checkout.")
 
@@ -152,7 +152,7 @@ def render_premium_export_section(frames: dict, tracks: list[dict]) -> None:
     if not is_premium():
         with st.container(border=True):
             st.markdown(
-                "🔒 **Premium** — export straight to **rekordbox**, **Serato**, and "
+                "**Premium** — export straight to **rekordbox**, **Serato**, and "
                 "**Traktor**, and write detected **key + BPM into your files' tags** so "
                 "your DJ software reads them."
             )
@@ -180,7 +180,7 @@ def render_premium_export_section(frames: dict, tracks: list[dict]) -> None:
 
     st.markdown('<p class="section-hint">Write key + BPM into the audio files themselves:</p>',
                 unsafe_allow_html=True)
-    if st.button("✍ Write key + BPM to file tags", width="stretch"):
+    if st.button("Write key + BPM to file tags", width="stretch"):
         results = dx.write_tags(tracks)
         with st.expander("Tag write results", expanded=True):
             for line in results:
