@@ -54,6 +54,29 @@ def _connect() -> sqlite3.Connection:
             created_at REAL NOT NULL
         )"""
     )
+    # Browser sessions: only the token HASH is stored, so a leaked DB can't
+    # be replayed as a login.
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS sessions (
+            token_hash TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            expires_at REAL NOT NULL
+        )"""
+    )
+    # One-time codes for password reset / email verification (hashed too).
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS codes (
+            user_id INTEGER NOT NULL,
+            purpose TEXT NOT NULL,
+            code_hash TEXT NOT NULL,
+            expires_at REAL NOT NULL,
+            PRIMARY KEY (user_id, purpose)
+        )"""
+    )
+    # Lightweight migration: older DBs lack the `verified` column.
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+    if "verified" not in columns:
+        conn.execute("ALTER TABLE users ADD COLUMN verified INTEGER NOT NULL DEFAULT 0")
     return conn
 
 
@@ -74,8 +97,113 @@ def _verify_password(password: str, stored: str) -> bool:
 
 
 def _row_to_user(row: sqlite3.Row) -> dict:
+    keys = row.keys()
     return {"id": row["id"], "email": row["email"], "name": row["name"],
-            "role": row["role"] if row["role"] in ROLES else "free"}
+            "role": row["role"] if row["role"] in ROLES else "free",
+            "verified": bool(row["verified"]) if "verified" in keys else False}
+
+
+# --------------------------------------------------------------------------- #
+# Persistent browser sessions (cookie token <-> hashed DB record)
+# --------------------------------------------------------------------------- #
+
+SESSION_TTL = 30 * 86400  # 30 days
+CODE_TTL = 15 * 60        # reset/verify codes live 15 minutes
+
+import secrets as _secrets  # noqa: E402
+
+
+def _sha(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def issue_session(user_id: int) -> str:
+    """Create a session token for the cookie; only its hash is stored."""
+    token = _secrets.token_urlsafe(32)
+    with _connect() as conn:
+        conn.execute("DELETE FROM sessions WHERE expires_at < ?", (time.time(),))
+        conn.execute(
+            "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?,?,?)",
+            (_sha(token), user_id, time.time() + SESSION_TTL),
+        )
+    return token
+
+
+def restore_session(token: str | None) -> dict | None:
+    if not token:
+        return None
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id"
+            " WHERE s.token_hash = ? AND s.expires_at > ?",
+            (_sha(token), time.time()),
+        ).fetchone()
+    return _row_to_user(row) if row else None
+
+
+def revoke_session(token: str | None) -> None:
+    if not token:
+        return
+    with _connect() as conn:
+        conn.execute("DELETE FROM sessions WHERE token_hash = ?", (_sha(token),))
+
+
+def revoke_all_sessions(user_id: int) -> None:
+    with _connect() as conn:
+        conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+
+
+# --------------------------------------------------------------------------- #
+# One-time codes: password reset + email verification
+# --------------------------------------------------------------------------- #
+
+def create_code(email: str, purpose: str) -> tuple[str | None, int | None]:
+    """Mint a 6-digit code for a user. Returns (code, user_id) or (None, None)."""
+    with _connect() as conn:
+        row = conn.execute("SELECT id FROM users WHERE email=?",
+                           (email.strip().lower(),)).fetchone()
+        if not row:
+            return None, None
+        code = f"{_secrets.randbelow(1_000_000):06d}"
+        conn.execute(
+            "INSERT OR REPLACE INTO codes (user_id, purpose, code_hash, expires_at)"
+            " VALUES (?,?,?,?)",
+            (row["id"], purpose, _sha(code), time.time() + CODE_TTL),
+        )
+    return code, row["id"]
+
+
+def consume_code(email: str, purpose: str, code: str) -> int | None:
+    """Validate + burn a code. Returns the user id when it matches."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT c.user_id FROM codes c JOIN users u ON u.id = c.user_id"
+            " WHERE u.email=? AND c.purpose=? AND c.code_hash=? AND c.expires_at > ?",
+            (email.strip().lower(), purpose, _sha(code.strip()), time.time()),
+        ).fetchone()
+        if not row:
+            return None
+        conn.execute("DELETE FROM codes WHERE user_id=? AND purpose=?",
+                     (row["user_id"], purpose))
+    return row["user_id"]
+
+
+def set_password(user_id: int, new_password: str) -> str:
+    if len(new_password) < 8:
+        return "Password needs at least 8 characters."
+    with _connect() as conn:
+        conn.execute("UPDATE users SET pw_hash=? WHERE id=?",
+                     (_hash_password(new_password), user_id))
+    revoke_all_sessions(user_id)  # force re-login everywhere
+    return ""
+
+
+def mark_verified(user_id: int) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE users SET verified=1 WHERE id=?", (user_id,))
+    user = st.session_state.get("auth_user")
+    if user and user["id"] == user_id:
+        user["verified"] = True
 
 
 # --------------------------------------------------------------------------- #

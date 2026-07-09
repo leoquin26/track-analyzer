@@ -198,8 +198,23 @@ MODULE_DESCRIPTIONS = {
 }
 
 
+def _start_session(user: dict) -> None:
+    """Session-state login + persistent cookie so a refresh keeps you in.
+
+    The cookie itself is written on the NEXT run (via ``_cookie_set``): writing
+    it here and immediately calling ``st.rerun()`` tears the component iframe
+    down before its script executes, so the cookie never lands.
+    """
+    auth.sign_in_session(user)
+    token = auth.issue_session(user["id"])
+    st.session_state["_session_token"] = token
+    st.session_state["_cookie_set"] = token
+
+
 def _render_auth_gate() -> None:
-    """Sign-in / create-account panel shown instead of the workspace."""
+    """Sign-in / create-account / reset panel shown instead of the workspace."""
+    from ui import mailer
+
     st.markdown(
         '<div class="setup-kicker">Welcome</div>'
         '<h2 class="setup-title">Sign in to your workspace</h2>'
@@ -207,7 +222,7 @@ def _render_auth_gate() -> None:
         'Creating one is free.</p>',
         unsafe_allow_html=True,
     )
-    tab_in, tab_up = st.tabs(["Sign in", "Create account"])
+    tab_in, tab_up, tab_reset = st.tabs(["Sign in", "Create account", "Forgot password"])
 
     with tab_in:
         with st.form("login_form"):
@@ -216,7 +231,7 @@ def _render_auth_gate() -> None:
             if st.form_submit_button("Sign in", type="primary", width="stretch"):
                 user, error = auth.login(email, password)
                 if user:
-                    auth.sign_in_session(user)
+                    _start_session(user)
                     st.rerun()
                 else:
                     st.error(error)
@@ -229,10 +244,40 @@ def _render_auth_gate() -> None:
             if st.form_submit_button("Create free account", type="primary", width="stretch"):
                 user, error = auth.register(email, name, password)
                 if user:
-                    auth.sign_in_session(user)
+                    if mailer.configured():
+                        code, _uid = auth.create_code(user["email"], "verify")
+                        if code:
+                            mailer.send_code(user["email"], code, "verify")
+                    _start_session(user)
                     st.rerun()
                 else:
                     st.error(error)
+
+    with tab_reset:
+        if not mailer.configured():
+            st.info("Password reset sends a code by email, which isn't configured yet. "
+                    "Set `smtp_host`, `smtp_user` and `smtp_password` in secrets to enable it.")
+        email = st.text_input("Account email", key="fp_email")
+        if st.button("Send reset code", width="stretch", key="fp_send",
+                     disabled=not mailer.configured()):
+            code, _uid = auth.create_code(email, "reset")
+            if code:
+                error = mailer.send_code(email.strip().lower(), code, "reset")
+                st.error(error) if error else st.success("Code sent — check your inbox.")
+            else:
+                # Same message either way: don't leak which emails exist.
+                st.success("Code sent — check your inbox.")
+        with st.form("reset_form"):
+            code = st.text_input("6-digit code", key="fp_code")
+            new_pw = st.text_input("New password (8+ characters)", type="password", key="fp_new")
+            if st.form_submit_button("Reset password", width="stretch"):
+                user_id = auth.consume_code(email, "reset", code)
+                if user_id is None:
+                    st.error("That code isn't valid (or it expired — they last 15 minutes).")
+                else:
+                    error = auth.set_password(user_id, new_pw)
+                    st.error(error) if error else st.success(
+                        "Password updated — sign in with it now.")
 
     st.caption("Free plan: up to 50 tracks per analysis, harmonic ordering, CSV + M3U export. "
                "Pro unlocks unlimited tracks, Discover, energy curves and DJ-software exports.")
@@ -283,8 +328,36 @@ def _module_account() -> None:
         else:
             st.error(message)
 
+    if not user.get("verified"):
+        from ui import mailer
+
+        _divider()
+        st.markdown('<div class="section-title">Verify your email</div>', unsafe_allow_html=True)
+        if mailer.configured():
+            v1, v2 = st.columns([2, 1], vertical_alignment="bottom")
+            with v1:
+                vcode = st.text_input("6-digit code from your inbox", key="acct_vcode")
+            with v2:
+                if st.button("Resend code", width="stretch", key="acct_vresend"):
+                    code, _uid = auth.create_code(user["email"], "verify")
+                    error = mailer.send_code(user["email"], code, "verify") if code else "No account."
+                    st.error(error) if error else st.toast("Code sent", icon="✉️")
+            if st.button("Verify email", width="stretch", key="acct_verify"):
+                if auth.consume_code(user["email"], "verify", vcode) is not None:
+                    auth.mark_verified(user["id"])
+                    st.success("Email verified — thanks!")
+                    st.rerun()
+                else:
+                    st.error("That code isn't valid (or it expired).")
+        else:
+            st.caption("Email verification needs SMTP configured "
+                       "(`smtp_host`/`smtp_user`/`smtp_password` in secrets).")
+
     _divider()
     if st.button("Sign out", key="acct_signout"):
+        auth.revoke_session(st.session_state.get("_session_token"))
+        st.session_state["_session_token"] = None
+        st.session_state["_cookie_clear"] = True
         auth.sign_out()
         st.rerun()
 
@@ -570,6 +643,22 @@ def _module_export(frames: dict, ordered: list[dict]) -> None:
 
 def analyzer_page() -> None:
     st.markdown(ANALYZER_CSS, unsafe_allow_html=True)
+
+    # Deferred cookie writes (see _start_session for why they can't happen
+    # in the same run as a st.rerun()).
+    pending_token = st.session_state.pop("_cookie_set", None)
+    if pending_token:
+        components.set_session_cookie(pending_token, auth.SESSION_TTL)
+    if st.session_state.pop("_cookie_clear", False):
+        components.clear_session_cookie()
+
+    # Survive hard refreshes: restore the session from the browser cookie.
+    if auth.current_user() is None:
+        token = components.read_session_cookie()
+        user = auth.restore_session(token)
+        if user:
+            auth.sign_in_session(user)
+            st.session_state["_session_token"] = token
 
     if auth.current_user() is None:
         _render_auth_gate()

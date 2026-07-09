@@ -33,6 +33,40 @@ _WEIGHT_LABELS = {
 }
 
 
+_SESSION_COOKIE = "kf_session"
+
+
+def set_session_cookie(token: str, max_age: int) -> None:
+    """Persist the session token in the browser. JS runs from a components
+    iframe (same origin), targeting the parent document's cookie jar."""
+    import streamlit.components.v1 as html_components
+
+    html_components.html(
+        f"<script>window.parent.document.cookie = "
+        f"'{_SESSION_COOKIE}={token}; path=/; max-age={max_age}; SameSite=Lax';</script>",
+        height=0,
+    )
+
+
+def clear_session_cookie() -> None:
+    import streamlit.components.v1 as html_components
+
+    html_components.html(
+        f"<script>window.parent.document.cookie = "
+        f"'{_SESSION_COOKIE}=; path=/; max-age=0';</script>",
+        height=0,
+    )
+
+
+def read_session_cookie() -> str | None:
+    """Server-side read of the cookie from the page's initial request."""
+    try:
+        value = st.context.cookies.get(_SESSION_COOKIE)
+        return value if isinstance(value, str) and value else None
+    except Exception:  # noqa: BLE001 - no context (tests) or old Streamlit
+        return None
+
+
 def folder_picker_available() -> bool:
     """Native folder dialogs need Tkinter + a display — absent on cloud hosts.
     Import lazily so a headless server never crashes at import time."""

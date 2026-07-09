@@ -17,6 +17,12 @@
   `track_suggest.py`) **no importa Streamlit** → se porta directo a FastAPI.
 
 ## Hecho recientemente (UI)
+- **Límites de auth resueltos**: sesión persistente por cookie (`kf_session`,
+  token hasheado en DB, TTL 30 días, escritura diferida al run siguiente para
+  sobrevivir al `st.rerun`), reset de contraseña y verificación de email con
+  códigos de un solo uso vía SMTP (`ui/mailer.py`, secrets `smtp_*`; degrada
+  con mensaje claro si no está configurado). Verificado en navegador: login →
+  refresh duro → sigue dentro.
 - **Cuentas + roles free/pro/lifetime** (`ui/auth.py`): registro/login (SQLite
   local + scrypt), gate de login en el analyzer, módulo Account (perfil, plan,
   upgrade, vincular licencia Gumroad → pro/lifetime, re-check semanal de Pro),
