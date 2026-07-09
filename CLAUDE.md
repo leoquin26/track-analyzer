@@ -4,7 +4,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A DJ playlist builder. It analyzes a folder of audio files for BPM, musical key (Camelot code), rhythm fingerprint, onset density, and energy, then greedily orders the tracks to maximize transition compatibility. Exports CSV + M3U. There is no database, server, or persistent state — every run reads audio files and writes flat files.
+**Keyflow** (rebranded from Track Analyzer; domain `keyflow.dj`, tagline "Sets that flow in key.") — a DJ playlist builder. `APP_TITLE`/`TAGLINE`/`DOMAIN` live in `ui/styles.py`; the license cache stays at `~/.track_analyzer/` for backward compatibility. It analyzes a folder of audio files for BPM, musical key (Camelot code), rhythm fingerprint, onset density, and energy, then greedily orders the tracks to maximize transition compatibility. Exports CSV + M3U.
+
+**Today** it runs fully local: no database, server, or persistent state — every run reads audio files and writes flat files. **This is changing** — the project is being rebuilt into a web SaaS with a backend API, accounts, and persistence (see the direction section below). When you touch architecture, assume the local-only model is transitional, not the target.
+
+## Current status & direction — READ FIRST
+
+The project is evolving from a local app into a **subscription SaaS** (web-first,
+then a native Windows/Mac app via Tauri). Before starting work, read
+**`docs/planning/PROJECT_STATUS.md`** for the current state and next steps. Deeper
+plans live in `docs/planning/track-analyzer-roadmap-saas.md` (business +
+architecture) and `docs/planning/track-analyzer-ui-plan.md` (UI redesign).
+
+**Resync command:** when the user types **`/estado`** (defined in
+`.claude/commands/estado.md`), re-read `docs/planning/PROJECT_STATUS.md` and the
+two planning docs above, then summarize the current state and the concrete next
+step before changing any code. Treat `/estado` as "catch up on the plan".
+
+Key facts for orientation:
+- Product direction: **100% web SaaS first** (analysis server-side via FastAPI wrapping `run_analysis()`; later browser/WASM feature extraction), then native via Tauri reusing the web frontend. Monetization = subscription + credits.
+- The engine files (`harmonic_playlist.py`, `dj_export.py`, `track_suggest.py`) import **no Streamlit** — keep it that way so they port straight to a web backend.
+- UI has been redesigned **premium/minimal** (`ui/styles.py` tokens, rebuilt `ui/pages/home.py` with SaaS sections incl. pricing). Restart Streamlit fully after `ui/` edits.
+- Recurring billing is nearly wired: `ui/premium.py` already handles Gumroad subscription fields — converting the Gumroad product to a *membership* enables it.
 
 ## Commands
 

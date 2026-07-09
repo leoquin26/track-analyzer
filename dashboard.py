@@ -1,4 +1,4 @@
-"""Track Analyzer — multipage entry point / router.
+"""Keyflow — multipage entry point / router.
 
 Defines page config, session state, and CSS once, then hands off to the Home
 (landing) and Analyzer pages via ``st.navigation``. Page bodies live in

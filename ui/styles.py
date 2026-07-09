@@ -1,539 +1,488 @@
-"""Theme constants and the injected CSS for the dashboard."""
+"""Theme constants and the injected CSS for the dashboard.
+
+Design language: premium / minimal. Teal is used sparingly as a single accent;
+surfaces are near-flat with hairline borders; typography (Syne display, Space
+Grotesk UI, JetBrains Mono meta) carries the hierarchy instead of neon glow.
+All class names referenced by the pages/components are preserved.
+"""
 
 from __future__ import annotations
 
-APP_TITLE = "Track Analyzer"
+APP_TITLE = "Keyflow"
+TAGLINE = "Sets that flow in key."
+DOMAIN = "keyflow.dj"
 ACCENT = "#00f5d4"
 ACCENT_2 = "#9b5de5"
 SURFACE = "#12121a"
 SURFACE_2 = "#1a1a27"
 
-# Colors used by the per-component transition charts (keep in sync with charts.py).
+# Categorical series colors for the transition-component charts.
+# Validated (dataviz six checks, dark surface #08080b): lightness band,
+# chroma floor, adjacent-pair CVD ΔE ≥ 41, contrast ≥ 3:1. Brand teal stays
+# reserved for UI accents and single-series marks (energy curve, wheel).
 COMPONENT_COLORS = {
-    "harmonic": ACCENT_2,
-    "bpm": ACCENT,
-    "rhythm": "#f15bb5",
-    "onset": "#fee440",
-    "energy": "#00bbf9",
+    "harmonic": "#9085e9",
+    "bpm": "#199e70",
+    "rhythm": "#c98500",
+    "onset": "#d55181",
+    "energy": "#3987e5",
 }
 
 
+# --------------------------------------------------------------------------- #
+# Global app CSS (injected on every page by dashboard.py)
+# --------------------------------------------------------------------------- #
 CUSTOM_CSS = f"""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
     :root {{
         --accent: {ACCENT};
         --accent-2: {ACCENT_2};
-        --surface: {SURFACE};
-        --surface-2: {SURFACE_2};
+        --bg: #08080b;
+        --ink: #f5f5f7;
+        --muted: rgba(245,245,247,0.58);
+        --faint: rgba(245,245,247,0.40);
+        --line: rgba(255,255,255,0.08);
+        --line-soft: rgba(255,255,255,0.05);
+        --surface: rgba(255,255,255,0.025);
+        --surface-2: rgba(255,255,255,0.04);
     }}
 
     .stApp {{
         background:
-            radial-gradient(ellipse 80% 50% at 20% -10%, rgba(155, 93, 229, 0.18), transparent 55%),
-            radial-gradient(ellipse 60% 40% at 90% 10%, rgba(0, 245, 212, 0.12), transparent 50%),
-            linear-gradient(180deg, #0a0a0f 0%, #0f0f18 100%);
+            radial-gradient(1100px 520px at 50% -280px, rgba(0,245,212,0.06), transparent 70%),
+            var(--bg);
         font-family: 'Space Grotesk', sans-serif;
+        color: var(--ink);
+    }}
+
+    [data-testid="stMainBlockContainer"], .block-container {{
+        max-width: 1200px !important;
     }}
 
     [data-testid="stSidebar"] {{
-        background: linear-gradient(180deg, #101018 0%, #141422 100%);
-        border-right: 1px solid rgba(255, 255, 255, 0.06);
+        background: #0b0b10;
+        border-right: 1px solid var(--line);
     }}
+    [data-testid="stSidebar"] .block-container {{ padding-top: 1.5rem; }}
 
-    [data-testid="stSidebar"] .block-container {{
-        padding-top: 1.5rem;
+    /* Buttons: premium, kind-aware */
+    div[data-testid="stButton"] > button,
+    div[data-testid="stDownloadButton"] > button,
+    div[data-testid="stLinkButton"] > a {{
+        border-radius: 11px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
     }}
-
-    .hero {{
-        padding: 0.25rem 0 1.5rem 0;
+    div[data-testid="stButton"] > button[kind="primary"] {{
+        background: var(--ink);
+        color: #0a0a0e;
+        border: 1px solid var(--ink);
     }}
-
-    .hero h1 {{
-        font-size: 2.6rem;
-        font-weight: 700;
-        margin: 0;
-        background: linear-gradient(135deg, #ffffff 0%, {ACCENT} 55%, {ACCENT_2} 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        letter-spacing: -0.03em;
-    }}
-
-    .hero p {{
-        color: rgba(255, 255, 255, 0.62);
-        font-size: 1.05rem;
-        margin: 0.5rem 0 0 0;
-        max-width: 52rem;
-    }}
-
-    .metric-card {{
-        background: linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 16px;
-        padding: 1.1rem 1.25rem;
-        backdrop-filter: blur(8px);
-        min-height: 108px;
-    }}
-
-    .metric-label {{
-        color: rgba(255, 255, 255, 0.55);
-        font-size: 0.82rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        margin-bottom: 0.35rem;
-    }}
-
-    .metric-value {{
-        color: #ffffff;
-        font-size: 1.85rem;
-        font-weight: 700;
-        line-height: 1.1;
-    }}
-
-    .metric-sub {{
-        color: {ACCENT};
-        font-size: 0.85rem;
-        margin-top: 0.35rem;
-        font-family: 'JetBrains Mono', monospace;
-    }}
-
-    .playlist-card {{
-        background: linear-gradient(135deg, rgba(0, 245, 212, 0.06), rgba(155, 93, 229, 0.06));
-        border: 1px solid rgba(255, 255, 255, 0.09);
-        border-radius: 18px;
-        padding: 1rem 1.1rem;
-        margin-bottom: 0.35rem;
-        transition: transform 0.15s ease, border-color 0.15s ease;
-    }}
-
-    .playlist-card:hover {{
-        border-color: rgba(0, 245, 212, 0.35);
+    div[data-testid="stButton"] > button[kind="primary"]:hover {{
+        background: #ffffff;
+        border-color: #ffffff;
+        color: #08080b;
         transform: translateY(-1px);
     }}
-
-    .playlist-order {{
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 2.2rem;
-        height: 2.2rem;
-        border-radius: 999px;
-        background: linear-gradient(135deg, {ACCENT}, {ACCENT_2});
-        color: #0a0a0f;
-        font-weight: 700;
-        font-size: 0.95rem;
-        margin-right: 0.85rem;
-        flex-shrink: 0;
+    div[data-testid="stButton"] > button[kind="secondary"],
+    div[data-testid="stDownloadButton"] > button,
+    div[data-testid="stLinkButton"] > a {{
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        color: var(--ink);
     }}
-
-    .playlist-title {{
+    div[data-testid="stButton"] > button[kind="secondary"]:hover,
+    div[data-testid="stDownloadButton"] > button:hover,
+    div[data-testid="stLinkButton"] > a:hover {{
+        border-color: rgba(0,245,212,0.45);
         color: #fff;
-        font-size: 1.05rem;
-        font-weight: 600;
-        margin: 0;
     }}
 
-    .playlist-meta {{
-        color: rgba(255, 255, 255, 0.58);
-        font-size: 0.86rem;
-        margin-top: 0.25rem;
+    .stTextInput input, .stNumberInput input {{
+        border-radius: 11px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        color: var(--ink);
         font-family: 'JetBrains Mono', monospace;
     }}
+    .stTextInput input:focus, .stNumberInput input:focus {{
+        border-color: rgba(0,245,212,0.45);
+        box-shadow: none;
+    }}
+
+    .hero {{ padding: 0.25rem 0 1.5rem 0; }}
+    .hero h1 {{
+        font-family: 'Syne', sans-serif;
+        font-size: 2.6rem; font-weight: 800; margin: 0;
+        color: var(--ink); letter-spacing: -0.03em;
+    }}
+    .hero p {{ color: var(--muted); font-size: 1.05rem; margin: 0.5rem 0 0 0; max-width: 52rem; }}
+
+    .metric-card {{
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 1.1rem 1.25rem;
+        min-height: 108px;
+    }}
+    .metric-label {{
+        color: var(--faint); font-size: 0.74rem;
+        text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 0.4rem;
+    }}
+    .metric-value {{ color: var(--ink); font-size: 1.85rem; font-weight: 700; line-height: 1.1; }}
+    .metric-sub {{ color: var(--accent); font-size: 0.85rem; margin-top: 0.35rem; font-family: 'JetBrains Mono', monospace; }}
+
+    .playlist-card {{
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 1rem 1.1rem;
+        margin-bottom: 0.35rem;
+        transition: border-color 0.16s ease, background 0.16s ease;
+    }}
+    .playlist-card:hover {{ border-color: rgba(0,245,212,0.3); background: var(--surface-2); }}
+    .playlist-order {{
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 2.1rem; height: 2.1rem; border-radius: 999px;
+        background: var(--surface-2); border: 1px solid var(--line);
+        color: var(--accent); font-weight: 700; font-size: 0.9rem;
+        margin-right: 0.85rem; flex-shrink: 0;
+        font-family: 'JetBrains Mono', monospace;
+    }}
+    .playlist-title {{ color: var(--ink); font-size: 1.02rem; font-weight: 600; margin: 0; }}
+    .playlist-meta {{ color: var(--muted); font-size: 0.84rem; margin-top: 0.28rem; font-family: 'JetBrains Mono', monospace; }}
 
     .camelot-pill {{
-        display: inline-block;
-        padding: 0.15rem 0.55rem;
-        border-radius: 999px;
-        font-size: 0.78rem;
-        font-weight: 600;
-        margin-right: 0.45rem;
+        display: inline-block; padding: 0.14rem 0.55rem; border-radius: 999px;
+        font-size: 0.76rem; font-weight: 600; margin-right: 0.45rem;
         font-family: 'JetBrains Mono', monospace;
     }}
-
-    .camelot-a {{
-        background: rgba(155, 93, 229, 0.22);
-        color: #d8b4fe;
-        border: 1px solid rgba(155, 93, 229, 0.35);
-    }}
-
-    .camelot-b {{
-        background: rgba(0, 245, 212, 0.18);
-        color: #7fffe8;
-        border: 1px solid rgba(0, 245, 212, 0.35);
-    }}
+    .camelot-a {{ background: rgba(155,93,229,0.16); color: #d8b4fe; border: 1px solid rgba(155,93,229,0.3); }}
+    .camelot-b {{ background: rgba(0,245,212,0.14); color: #7fffe8; border: 1px solid rgba(0,245,212,0.3); }}
 
     .score-pill {{
-        display: inline-block;
-        margin-top: 0.45rem;
-        padding: 0.2rem 0.55rem;
-        border-radius: 8px;
-        background: rgba(255, 255, 255, 0.06);
-        color: {ACCENT};
-        font-size: 0.78rem;
-        font-family: 'JetBrains Mono', monospace;
+        display: inline-block; margin-top: 0.45rem; padding: 0.2rem 0.55rem;
+        border-radius: 8px; background: rgba(255,255,255,0.05); color: var(--muted);
+        font-size: 0.76rem; font-family: 'JetBrains Mono', monospace;
     }}
+    .score-pill.warn {{ color: #ffb4a2; background: rgba(241,91,91,0.1); }}
+    .score-pill.good {{ color: #7fffe8; background: rgba(0,245,212,0.1); }}
 
-    .score-pill.warn {{
-        color: #ffb4a2;
-        background: rgba(241, 91, 91, 0.12);
-    }}
+    .score-pill[title], .chip[title], .ic[title], .mix-card[title], .camelot-pill[title] {{ cursor: help; }}
 
-    .score-pill.good {{
-        color: #7fffe8;
-        background: rgba(0, 245, 212, 0.12);
-    }}
-
-    /* Anything with a tooltip invites a hover. */
-    .score-pill[title], .chip[title], .ic[title], .mix-card[title], .camelot-pill[title] {{
-        cursor: help;
-    }}
-
-    /* Module switcher: styled as underline navigation tabs so it reads as
-       "where am I", clearly distinct from the pill-shaped setting controls. */
-    .st-key-an_module {{
-        margin: 0.7rem 0 0.4rem;
-        border-bottom: 1px solid rgba(255,255,255,0.08);
-    }}
+    .st-key-an_module {{ margin: 0.7rem 0 0.4rem; border-bottom: 1px solid var(--line); }}
     .st-key-an_module button {{
-        background: transparent !important;
-        border: none !important;
-        border-radius: 0 !important;
+        background: transparent !important; border: none !important; border-radius: 0 !important;
         border-bottom: 2px solid transparent !important;
-        font-size: 0.98rem !important;
-        padding: 0.6rem 1.15rem !important;
-        font-weight: 600;
-        color: rgba(255,255,255,0.55) !important;
-        box-shadow: none !important;
+        font-size: 0.96rem !important; padding: 0.6rem 1.1rem !important; font-weight: 600;
+        color: var(--faint) !important; box-shadow: none !important;
     }}
-    .st-key-an_module button:hover {{
-        color: #fff !important;
-    }}
-    /* Selected tab: theme primaryColor drives the text; we add the underline. */
+    .st-key-an_module button:hover {{ color: #fff !important; }}
     .st-key-an_module button[kind="segmented_controlActive"],
     .st-key-an_module button[aria-checked="true"] {{
-        color: {ACCENT} !important;
-        border-bottom: 2px solid {ACCENT} !important;
+        color: var(--ink) !important; border-bottom: 2px solid var(--accent) !important;
     }}
 
-    /* Setup journey strip */
     .setup-steps {{
-        display: flex; flex-wrap: wrap; gap: 2rem;
-        margin: 0.3rem 0 1.2rem;
-        font-size: 0.86rem; color: rgba(255,255,255,0.55);
+        display: flex; flex-wrap: wrap; gap: 2rem; margin: 0.3rem 0 1.2rem;
+        font-size: 0.86rem; color: var(--muted);
     }}
     .setup-steps b {{
-        font-family: 'Syne', sans-serif; font-size: 1.05rem;
-        background: linear-gradient(120deg, {ACCENT}, {ACCENT_2});
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        font-family: 'Syne', sans-serif; font-size: 1.02rem; color: var(--accent);
         margin-right: 0.4rem;
     }}
 
-    /* Labeled control bar */
     .bar-label {{
-        font-family: 'JetBrains Mono', monospace; font-size: 0.68rem;
-        letter-spacing: 0.25em; text-transform: uppercase;
-        color: rgba(255,255,255,0.45); margin-bottom: 0.15rem;
+        font-family: 'JetBrains Mono', monospace; font-size: 0.66rem;
+        letter-spacing: 0.26em; text-transform: uppercase; color: var(--faint); margin-bottom: 0.15rem;
     }}
+    .module-desc {{ color: var(--muted); font-size: 0.88rem; margin: 0.2rem 0 1rem; }}
 
-    /* Module description line under the nav */
-    .module-desc {{
-        color: rgba(255,255,255,0.5); font-size: 0.88rem; margin: 0.2rem 0 1rem;
-    }}
-
-    /* Discover cards */
     .disc-card {{
-        display: flex; align-items: center; gap: 0.8rem;
-        padding: 0.85rem 1rem; margin-bottom: 0.6rem; border-radius: 14px;
-        background: linear-gradient(135deg, rgba(0,245,212,0.04), rgba(155,93,229,0.04));
-        border: 1px solid rgba(255,255,255,0.08);
+        display: flex; align-items: center; gap: 0.8rem; padding: 0.85rem 1rem;
+        margin-bottom: 0.6rem; border-radius: 14px;
+        background: var(--surface); border: 1px solid var(--line);
+        transition: border-color .16s ease;
     }}
-    .disc-card .t {{ color: #fff; font-size: 0.95rem; font-weight: 600; }}
-    .disc-card .a {{ color: rgba(255,255,255,0.55); font-size: 0.85rem; }}
+    .disc-card:hover {{ border-color: rgba(0,245,212,0.28); }}
+    .disc-card .t {{ color: var(--ink); font-size: 0.95rem; font-weight: 600; }}
+    .disc-card .a {{ color: var(--muted); font-size: 0.85rem; }}
     .disc-card .grow {{ flex: 1; min-width: 0; }}
     .disc-card .src {{
         font-family: 'JetBrains Mono', monospace; font-size: 0.68rem;
         padding: 0.15rem 0.5rem; border-radius: 999px;
-        border: 1px solid rgba(255,255,255,0.14); color: rgba(255,255,255,0.55);
+        border: 1px solid var(--line); color: var(--muted);
     }}
-    .disc-card a {{ color: {ACCENT}; text-decoration: none; font-size: 0.85rem; }}
+    .disc-card a {{ color: var(--accent); text-decoration: none; font-size: 0.85rem; }}
     .disc-chip {{
         font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
         padding: 0.2rem 0.55rem; border-radius: 8px;
-        background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
-        color: rgba(255,255,255,0.72); white-space: nowrap;
+        background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: var(--muted);
+        white-space: nowrap;
     }}
     .disc-chip.good {{ color: #7fffe8; background: rgba(0,245,212,0.1); }}
     .disc-chip.warn {{ color: #ffb4a2; background: rgba(241,91,91,0.1); }}
 
     .empty-state {{
-        text-align: center;
-        padding: 3.5rem 1.5rem;
-        border: 1px dashed rgba(255, 255, 255, 0.12);
-        border-radius: 20px;
-        background: rgba(255, 255, 255, 0.02);
+        text-align: center; padding: 3.5rem 1.5rem;
+        border: 1px dashed var(--line); border-radius: 20px; background: var(--surface);
     }}
-
-    .empty-state h3 {{
-        color: #fff;
-        margin-bottom: 0.5rem;
-    }}
-
-    .empty-state p {{
-        color: rgba(255, 255, 255, 0.55);
-        margin: 0;
-    }}
-
-    div[data-testid="stButton"] > button {{
-        border-radius: 12px;
-        border: 1px solid rgba(0, 245, 212, 0.35);
-        background: linear-gradient(135deg, rgba(0, 245, 212, 0.18), rgba(155, 93, 229, 0.18));
-        color: white;
-        font-weight: 600;
-        transition: all 0.15s ease;
-    }}
-
-    div[data-testid="stButton"] > button:hover {{
-        border-color: {ACCENT};
-        box-shadow: 0 0 24px rgba(0, 245, 212, 0.18);
-        color: white;
-    }}
-
-    .stTextInput input {{
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        color: white;
-        font-family: 'JetBrains Mono', monospace;
-    }}
+    .empty-state h3 {{ color: var(--ink); margin-bottom: 0.5rem; }}
+    .empty-state p {{ color: var(--muted); margin: 0; }}
 
     .section-title {{
-        color: #fff;
-        font-size: 1.2rem;
-        font-weight: 600;
-        margin: 1.5rem 0 0.75rem 0;
-        letter-spacing: -0.02em;
+        color: var(--ink); font-size: 1.15rem; font-weight: 600;
+        margin: 1.5rem 0 0.75rem 0; letter-spacing: -0.02em;
     }}
+    .section-hint {{ color: var(--muted); font-size: 0.85rem; margin: -0.4rem 0 0.75rem 0; }}
 
-    .section-hint {{
-        color: rgba(255,255,255,0.5);
-        font-size: 0.85rem;
-        margin: -0.4rem 0 0.75rem 0;
-    }}
+    #MainMenu, footer, header {{ visibility: hidden; }}
+    [data-testid="stHeaderActionElements"] {{ display: none; }}
 
-    #MainMenu, footer, header {{
-        visibility: hidden;
-    }}
-
-    /* Hide Streamlit's hover anchor icons on headings. */
-    [data-testid="stHeaderActionElements"] {{
-        display: none;
-    }}
-
-    /* Shared app brand (header on every page) */
     .app-brand {{
-        font-family: 'Space Grotesk', sans-serif;
-        font-weight: 700;
-        font-size: 1.15rem;
-        letter-spacing: -0.02em;
-        color: #fff;
+        font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.12rem;
+        letter-spacing: -0.02em; color: var(--ink);
         display: flex; align-items: center; gap: 0.55rem;
     }}
     .app-brand .disc {{
-        width: 1.05rem; height: 1.05rem; border-radius: 50%;
+        width: 1.0rem; height: 1.0rem; border-radius: 50%;
         background: conic-gradient(from 0deg, {ACCENT}, {ACCENT_2}, #f15bb5, #fee440, {ACCENT});
-        box-shadow: 0 0 12px rgba(0,245,212,0.35);
     }}
     .app-brand .crumb {{
-        color: rgba(255,255,255,0.45); font-weight: 400; font-size: 0.95rem;
+        color: var(--faint); font-weight: 400; font-size: 0.9rem;
         font-family: 'JetBrains Mono', monospace; margin-left: 0.35rem;
     }}
     .app-header-rule {{
-        height: 1px; border: 0; margin: 0.4rem 0 1.1rem;
-        background: linear-gradient(90deg, rgba(0,245,212,0.25), rgba(255,255,255,0.06) 40%, rgba(255,255,255,0));
+        height: 1px; border: 0; margin: 0.5rem 0 1.3rem; background: var(--line);
     }}
-    /* Quiet, link-like header nav button */
     .st-key-nav_home button {{
-        background: transparent !important;
-        border: none !important;
-        color: rgba(255,255,255,0.6) !important;
-        font-weight: 500;
+        background: transparent !important; border: none !important;
+        color: var(--muted) !important; font-weight: 500;
     }}
-    .st-key-nav_home button:hover {{
-        color: {ACCENT} !important;
-        box-shadow: none !important;
-    }}
+    .st-key-nav_home button:hover {{ color: var(--accent) !important; box-shadow: none !important; }}
 
-    /* Tabs: use the theme accent instead of Streamlit's default red. */
-    .stTabs [data-baseweb="tab-highlight"] {{
-        background-color: {ACCENT};
-    }}
-    .stTabs button[aria-selected="true"] {{
-        color: {ACCENT} !important;
-    }}
+    .stTabs [data-baseweb="tab-highlight"] {{ background-color: var(--accent); }}
+    .stTabs button[aria-selected="true"] {{ color: var(--ink) !important; }}
 </style>
 """
 
 
-# Landing-page styles. Injected only by the Home page so the analyzer keeps its
-# sidebar; the landing hides the sidebar/header and renders a full navbar layout.
+# --------------------------------------------------------------------------- #
+# Landing-page CSS (injected only by home.py)
+# --------------------------------------------------------------------------- #
 HOME_CSS = f"""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&display=swap');
-
-    /* Landing chrome: no sidebar, no toolbar — a real landing page. */
     [data-testid="stSidebar"],
     [data-testid="stSidebarCollapsedControl"],
     [data-testid="collapsedControl"],
-    header[data-testid="stHeader"] {{
-        display: none !important;
-    }}
+    header[data-testid="stHeader"] {{ display: none !important; }}
     [data-testid="stMainBlockContainer"], .block-container {{
-        max-width: 1180px !important;
-        padding-top: 1.4rem !important;
+        max-width: 1120px !important; padding-top: 1.4rem !important;
     }}
 
-    /* Navbar */
     .lp-brand {{
-        font-family: 'Syne', sans-serif;
-        font-weight: 800;
-        font-size: 1.2rem;
-        letter-spacing: -0.02em;
-        color: #fff;
-        display: flex; align-items: center; gap: 0.55rem;
-        padding-top: 0.55rem;
+        font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.18rem;
+        letter-spacing: -0.02em; color: var(--ink);
+        display: flex; align-items: center; gap: 0.55rem; padding-top: 0.55rem;
     }}
     .lp-brand .disc {{
-        width: 1.15rem; height: 1.15rem; border-radius: 50%;
+        width: 1.1rem; height: 1.1rem; border-radius: 50%;
         background: conic-gradient(from 0deg, {ACCENT}, {ACCENT_2}, #f15bb5, #fee440, {ACCENT});
-        box-shadow: 0 0 14px rgba(0,245,212,0.4);
     }}
     .lp-links {{
-        display: flex; justify-content: flex-end; align-items: center; gap: 1.8rem;
+        display: flex; justify-content: flex-end; align-items: center; gap: 1.9rem;
         height: 100%; padding-top: 0.7rem;
-        font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; letter-spacing: 0.06em;
+        font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; letter-spacing: 0.04em;
     }}
-    .lp-links a {{ color: rgba(255,255,255,0.6); text-decoration: none; transition: color 0.15s ease; }}
-    .lp-links a:hover {{ color: {ACCENT}; }}
+    .lp-links a {{ color: var(--muted); text-decoration: none; transition: color 0.15s ease; }}
+    .lp-links a:hover {{ color: var(--accent); }}
 
-    /* Hero */
     .lp-eyebrow {{
-        display: inline-block;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.75rem; letter-spacing: 0.34em; text-transform: uppercase;
-        color: {ACCENT};
+        display: inline-block; font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem; letter-spacing: 0.28em; text-transform: uppercase; color: var(--muted);
         padding: 0.35rem 0.85rem; border-radius: 999px;
-        border: 1px solid rgba(0,245,212,0.3); background: rgba(0,245,212,0.06);
+        border: 1px solid var(--line); background: var(--surface);
     }}
+    .lp-eyebrow b {{ color: var(--accent); font-weight: 500; }}
     .lp-title {{
         font-family: 'Syne', sans-serif; font-weight: 800;
-        font-size: clamp(2.9rem, 5.6vw, 4.6rem); line-height: 0.98;
-        letter-spacing: -0.03em; margin: 1.3rem 0 0; color: #fff;
+        font-size: clamp(3rem, 6vw, 5rem); line-height: 0.98;
+        letter-spacing: -0.035em; margin: 1.3rem 0 0; color: var(--ink);
     }}
-    .lp-title em {{
-        font-style: normal;
-        background: linear-gradient(115deg, {ACCENT} 0%, {ACCENT_2} 55%, #f15bb5 100%);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    }}
+    .lp-title em {{ font-style: normal; color: var(--accent); }}
     .lp-sub {{
-        color: rgba(255,255,255,0.66); font-size: 1.12rem; line-height: 1.55;
-        max-width: 30rem; margin: 1.3rem 0 0;
+        color: var(--muted); font-size: 1.14rem; line-height: 1.6;
+        max-width: 31rem; margin: 1.4rem 0 0; font-weight: 400;
     }}
     .lp-hero-note {{
-        margin-top: 1.6rem; color: rgba(255,255,255,0.4);
-        font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; letter-spacing: 0.04em;
+        margin-top: 1.6rem; color: var(--faint);
+        font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; letter-spacing: 0.03em;
     }}
 
-    /* Signature: the Camelot wheel */
-    .wheel-wrap {{
-        position: relative; width: min(100%, 440px); aspect-ratio: 1; margin: 0 auto;
-    }}
+    .wheel-wrap {{ position: relative; width: min(100%, 430px); aspect-ratio: 1; margin: 0 auto; }}
     .wheel-halo {{
-        position: absolute; inset: -6%; border-radius: 50%; z-index: 0;
+        position: absolute; inset: 2%; border-radius: 50%; z-index: 0;
         background: conic-gradient(from 0deg, {ACCENT}, {ACCENT_2}, #f15bb5, #fee440, {ACCENT});
-        filter: blur(40px); opacity: 0.32;
-        animation: spin 26s linear infinite;
+        filter: blur(46px); opacity: 0.16; animation: spin 40s linear infinite;
     }}
-    .wheel-svg {{
-        position: relative; z-index: 1; width: 100%; height: auto;
-        filter: drop-shadow(0 0 26px rgba(0,245,212,0.14));
-    }}
+    .wheel-svg {{ position: relative; z-index: 1; width: 100%; height: auto; }}
     @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
 
-    /* Spec chips */
-    .lp-specs {{
-        display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center;
-        margin: 0.5rem 0 0.5rem;
+    .lp-stats {{
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;
+        border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+        padding: 1.6rem 0; margin: 0.5rem 0;
     }}
-    .lp-chip {{
-        font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
-        color: rgba(255,255,255,0.72);
-        padding: 0.4rem 0.8rem; border-radius: 999px;
-        border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03);
+    .lp-stat {{ text-align: center; }}
+    .lp-stat .n {{
+        font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.9rem;
+        color: var(--ink); letter-spacing: -0.02em;
     }}
-    .lp-chip b {{ color: {ACCENT}; font-weight: 500; }}
+    .lp-stat .l {{
+        font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+        letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); margin-top: 0.25rem;
+    }}
 
-    /* Section headings */
+    .lp-specs {{ display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; margin: 0.5rem 0; }}
+    .lp-chip {{
+        font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--muted);
+        padding: 0.4rem 0.8rem; border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
+    }}
+    .lp-chip b {{ color: var(--accent); font-weight: 500; }}
+
     .lp-kicker {{
-        font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
-        letter-spacing: 0.3em; text-transform: uppercase; color: {ACCENT_2};
+        font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+        letter-spacing: 0.28em; text-transform: uppercase; color: var(--accent);
     }}
     .lp-h2 {{
         font-family: 'Syne', sans-serif; font-weight: 700;
-        font-size: clamp(1.7rem, 3vw, 2.4rem); letter-spacing: -0.02em;
-        color: #fff; margin: 0.3rem 0 0.2rem;
+        font-size: clamp(1.8rem, 3.2vw, 2.6rem); letter-spacing: -0.025em;
+        color: var(--ink); margin: 0.45rem 0 0.2rem;
     }}
+    .lp-lead {{ color: var(--muted); font-size: 1.02rem; max-width: 38rem; margin: 0.4rem 0 0; line-height: 1.6; }}
 
-    /* Feature cards */
     .feature-card {{
-        height: 100%;
-        background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
-        border: 1px solid rgba(255,255,255,0.08); border-radius: 18px;
-        padding: 1.4rem 1.3rem; transition: transform 0.15s ease, border-color 0.15s ease;
+        height: 100%; background: var(--surface); border: 1px solid var(--line);
+        border-radius: 18px; padding: 1.5rem 1.35rem;
+        transition: transform 0.16s ease, border-color 0.16s ease;
     }}
-    .feature-card:hover {{ transform: translateY(-3px); border-color: rgba(0,245,212,0.35); }}
-    .feature-icon {{ font-size: 1.6rem; }}
-    .feature-card h4 {{ color: #fff; margin: 0.6rem 0 0.35rem; font-size: 1.05rem; font-weight: 600; }}
-    .feature-card p {{ color: rgba(255,255,255,0.58); font-size: 0.88rem; margin: 0; line-height: 1.5; }}
+    .feature-card:hover {{ transform: translateY(-3px); border-color: rgba(0,245,212,0.3); }}
+    .feature-icon {{ font-size: 1.5rem; opacity: 0.95; }}
+    .feature-card h4 {{ color: var(--ink); margin: 0.7rem 0 0.4rem; font-size: 1.04rem; font-weight: 600; }}
+    .feature-card p {{ color: var(--muted); font-size: 0.9rem; margin: 0; line-height: 1.55; }}
 
-    /* How-it-works steps (a real sequence, so numbered) */
-    .lp-step {{
-        border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem; height: 100%;
+    .preview-frame {{
+        border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+        background: linear-gradient(180deg, #0c0c12, #0a0a10);
+        box-shadow: 0 30px 80px -40px rgba(0,0,0,0.8);
     }}
-    .lp-step .num {{
-        font-family: 'Syne', sans-serif; font-weight: 800; font-size: 2.1rem;
-        background: linear-gradient(120deg, {ACCENT}, {ACCENT_2});
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    .preview-bar {{
+        display: flex; align-items: center; gap: 0.4rem;
+        padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--line); background: rgba(255,255,255,0.02);
     }}
-    .lp-step h4 {{ color: #fff; margin: 0.3rem 0 0.35rem; font-size: 1.05rem; }}
-    .lp-step p {{ color: rgba(255,255,255,0.55); font-size: 0.88rem; margin: 0; line-height: 1.5; }}
+    .preview-bar i {{ width: 0.6rem; height: 0.6rem; border-radius: 50%; display: inline-block; background: rgba(255,255,255,0.16); }}
+    .preview-bar .u {{
+        margin-left: 0.6rem; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--faint);
+    }}
+    .preview-body {{ display: grid; grid-template-columns: 1.3fr 1fr; gap: 1.1rem; padding: 1.2rem; }}
+    .pv-rows {{ display: flex; flex-direction: column; gap: 0.5rem; }}
+    .pv-row {{
+        display: flex; align-items: center; gap: 0.6rem;
+        padding: 0.55rem 0.7rem; border-radius: 11px;
+        background: var(--surface); border: 1px solid var(--line-soft);
+    }}
+    .pv-row .o {{
+        font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--accent);
+        width: 1.1rem; text-align: center;
+    }}
+    .pv-row .nm {{ flex: 1; color: var(--ink); font-size: 0.82rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+    .pv-row .bp {{ font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--faint); }}
+    .pv-pill {{
+        font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; font-weight: 600;
+        padding: 0.1rem 0.4rem; border-radius: 999px;
+    }}
+    .pv-side {{ display: flex; flex-direction: column; gap: 0.7rem; }}
+    .pv-panel {{
+        border: 1px solid var(--line-soft); border-radius: 12px; padding: 0.85rem; background: var(--surface);
+    }}
+    .pv-panel .cap {{
+        font-family: 'JetBrains Mono', monospace; font-size: 0.64rem; letter-spacing: 0.14em;
+        text-transform: uppercase; color: var(--faint); margin-bottom: 0.55rem;
+    }}
 
-    /* Footer CTA band */
+    .price-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 0.4rem; }}
+    .price-card {{
+        display: flex; flex-direction: column; height: 100%;
+        background: var(--surface); border: 1px solid var(--line);
+        border-radius: 18px; padding: 1.6rem 1.4rem;
+    }}
+    .price-card.featured {{
+        border-color: rgba(0,245,212,0.45);
+        background: linear-gradient(180deg, rgba(0,245,212,0.05), var(--surface));
+    }}
+    .price-tag {{
+        font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; letter-spacing: 0.16em;
+        text-transform: uppercase; color: var(--accent);
+        border: 1px solid rgba(0,245,212,0.3); border-radius: 999px;
+        padding: 0.12rem 0.5rem; align-self: flex-start; margin-bottom: 0.7rem;
+    }}
+    .price-name {{ font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.2rem; color: var(--ink); }}
+    .price-amount {{ margin: 0.6rem 0 0.1rem; }}
+    .price-amount .a {{ font-family: 'Syne', sans-serif; font-weight: 800; font-size: 2.4rem; color: var(--ink); letter-spacing: -0.02em; }}
+    .price-amount .p {{ color: var(--faint); font-size: 0.9rem; font-family: 'JetBrains Mono', monospace; }}
+    .price-desc {{ color: var(--muted); font-size: 0.88rem; margin: 0.4rem 0 1rem; min-height: 2.4rem; }}
+    .price-feats {{ list-style: none; padding: 0; margin: 0 0 1.2rem; }}
+    .price-feats li {{ color: var(--muted); font-size: 0.88rem; padding: 0.32rem 0 0.32rem 1.4rem; position: relative; }}
+    .price-feats li::before {{ content: "+"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }}
+    .price-foot {{ margin-top: auto; }}
+
+    .compare {{
+        border: 1px solid var(--line); border-radius: 20px; padding: 2rem 1.8rem;
+        background: var(--surface); display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem;
+    }}
+    .compare .col h5 {{
+        font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; letter-spacing: 0.16em;
+        text-transform: uppercase; margin: 0 0 0.8rem;
+    }}
+    .compare .them h5 {{ color: var(--faint); }}
+    .compare .us h5 {{ color: var(--accent); }}
+    .compare ul {{ list-style: none; padding: 0; margin: 0; }}
+    .compare li {{ color: var(--muted); font-size: 0.92rem; padding: 0.34rem 0 0.34rem 1.5rem; position: relative; line-height: 1.4; }}
+    .compare .them li::before {{ content: "—"; position: absolute; left: 0; color: var(--faint); }}
+    .compare .us li::before {{ content: "+"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }}
+
+    .lp-center {{ text-align: center; }}
+    .lp-center .lp-lead {{ margin-left: auto; margin-right: auto; }}
+
     .lp-footer {{
-        text-align: center; padding: 2.8rem 1.5rem 6rem; margin-bottom: 0;
-        border: 1px solid rgba(255,255,255,0.08); border-radius: 24px;
+        text-align: center; padding: 3rem 1.5rem 6rem; margin-bottom: 0;
+        border: 1px solid var(--line); border-radius: 24px;
         background:
-            radial-gradient(ellipse 60% 120% at 50% 0%, rgba(155,93,229,0.15), transparent 60%),
-            linear-gradient(180deg, #0c0c14, #0a0a10);
+            radial-gradient(ellipse 60% 130% at 50% 0%, rgba(0,245,212,0.08), transparent 60%),
+            linear-gradient(180deg, #0b0b12, #0a0a10);
     }}
-    /* Pull the footer CTA up into the band so it reads as part of it. */
     .st-key-footer_cta {{ margin-top: -4.6rem; }}
     .lp-footer h3 {{
         font-family: 'Syne', sans-serif; font-weight: 700;
-        font-size: clamp(1.6rem, 3vw, 2.3rem); color: #fff; margin: 0 0 0.4rem;
+        font-size: clamp(1.7rem, 3vw, 2.4rem); color: var(--ink); margin: 0 0 0.4rem; letter-spacing: -0.02em;
     }}
-    .lp-footer p {{ color: rgba(255,255,255,0.55); margin: 0 0 1.3rem; }}
+    .lp-footer p {{ color: var(--muted); margin: 0 0 1.3rem; }}
     .lp-foot-mark {{
-        margin-top: 2rem; color: rgba(255,255,255,0.35);
+        margin-top: 2rem; color: var(--faint);
         font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
     }}
 
-    /* Give every Launch button breathing room so it never glues to a block. */
     div[data-testid="stButton"] {{ margin: 0.35rem 0; }}
 
-    /* Responsive: adapt navbar, type, and paddings down to mobile. */
     @media (max-width: 900px) {{
         .wheel-wrap {{ width: min(80%, 360px); margin-top: 1.5rem; }}
+        .preview-body {{ grid-template-columns: 1fr; }}
+        .lp-stats {{ grid-template-columns: repeat(2, 1fr); row-gap: 1.3rem; }}
+        .price-grid {{ grid-template-columns: 1fr; }}
+        .compare {{ grid-template-columns: 1fr; }}
     }}
     @media (max-width: 640px) {{
         [data-testid="stMainBlockContainer"], .block-container {{
@@ -541,89 +490,70 @@ HOME_CSS = f"""
         }}
         .lp-links {{ display: none; }}
         .lp-brand {{ font-size: 1.05rem; }}
-        .lp-title {{ font-size: clamp(2.2rem, 9vw, 3rem); }}
+        .lp-title {{ font-size: clamp(2.4rem, 10vw, 3.2rem); }}
         .lp-sub {{ font-size: 1rem; }}
-        .lp-footer {{ padding: 2rem 1.1rem; }}
-        .lp-h2 {{ font-size: 1.6rem; }}
+        .lp-footer {{ padding: 2.2rem 1.1rem 4rem; }}
+        .lp-h2 {{ font-size: 1.7rem; }}
     }}
-
-    @media (prefers-reduced-motion: reduce) {{
-        .wheel-halo {{ animation: none; }}
-    }}
+    @media (prefers-reduced-motion: reduce) {{ .wheel-halo {{ animation: none; }} }}
 </style>
 """
 
 
-# Analyzer-page polish: setup panel, control bar, status chips, inspector.
+# --------------------------------------------------------------------------- #
+# Analyzer-page CSS
+# --------------------------------------------------------------------------- #
 ANALYZER_CSS = f"""
 <style>
-    /* Bordered containers (setup panel + control bar) */
     [data-testid="stVerticalBlockBorderWrapper"] {{
-        background: rgba(255,255,255,0.02);
-        border-radius: 16px;
+        background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
     }}
 
     .setup-kicker {{
-        font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
-        letter-spacing: 0.3em; text-transform: uppercase; color: {ACCENT};
+        font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+        letter-spacing: 0.26em; text-transform: uppercase; color: var(--accent);
     }}
     .setup-title {{
-        font-family: 'Space Grotesk', sans-serif; font-weight: 700;
-        font-size: 1.7rem; color: #fff; margin: 0.2rem 0 0.2rem; letter-spacing: -0.02em;
+        font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.9rem; color: var(--ink);
+        margin: 0.3rem 0 0.2rem; letter-spacing: -0.025em;
     }}
-    .setup-sub {{ color: rgba(255,255,255,0.55); margin: 0 0 1rem; max-width: 34rem; }}
+    .setup-sub {{ color: var(--muted); margin: 0 0 1rem; max-width: 34rem; line-height: 1.55; }}
 
-    /* A quiet section divider */
-    .an-divider {{
-        height: 1px; border: 0; margin: 1.6rem 0 0.4rem;
-        background: linear-gradient(90deg, rgba(255,255,255,0.12), rgba(255,255,255,0));
-    }}
+    .an-divider {{ height: 1px; border: 0; margin: 1.6rem 0 0.4rem; background: var(--line); }}
 
-    /* Status chips under the header */
     .chip-row {{ display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.2rem 0 0.4rem; }}
     .chip-row .chip {{
-        font-family: 'JetBrains Mono', monospace; font-size: 0.76rem;
-        color: rgba(255,255,255,0.72); padding: 0.32rem 0.7rem; border-radius: 999px;
-        border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03);
+        font-family: 'JetBrains Mono', monospace; font-size: 0.76rem; color: var(--muted);
+        padding: 0.32rem 0.7rem; border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
     }}
-    .chip-row .chip b {{ color: {ACCENT}; font-weight: 500; }}
+    .chip-row .chip b {{ color: var(--ink); font-weight: 600; }}
 
-    /* Track inspector */
     .inspect-chips {{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.7rem; }}
     .inspect-chips .ic {{
-        font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
-        color: rgba(255,255,255,0.7); padding: 0.25rem 0.6rem; border-radius: 8px;
-        background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+        font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--muted);
+        padding: 0.25rem 0.6rem; border-radius: 8px; background: var(--surface); border: 1px solid var(--line);
     }}
     .inspect-h {{
-        color: rgba(255,255,255,0.55); font-size: 0.8rem; text-transform: uppercase;
-        letter-spacing: 0.12em; margin-bottom: 0.6rem;
+        color: var(--faint); font-size: 0.72rem; text-transform: uppercase;
+        letter-spacing: 0.14em; margin-bottom: 0.6rem;
     }}
     .mix-card {{
-        display: flex; align-items: center; gap: 0.7rem;
-        padding: 0.7rem 0.85rem; margin-bottom: 0.55rem; border-radius: 12px;
-        background: linear-gradient(135deg, rgba(0,245,212,0.05), rgba(155,93,229,0.05));
-        border: 1px solid rgba(255,255,255,0.08);
+        display: flex; align-items: center; gap: 0.7rem; padding: 0.7rem 0.85rem;
+        margin-bottom: 0.55rem; border-radius: 12px; background: var(--surface); border: 1px solid var(--line);
+        transition: border-color .16s ease;
     }}
-    .mix-name {{ color: #fff; font-size: 0.92rem; flex: 1; }}
-    .mix-score {{
-        font-family: 'JetBrains Mono', monospace; font-weight: 600; color: {ACCENT};
-    }}
+    .mix-card:hover {{ border-color: rgba(0,245,212,0.28); }}
+    .mix-name {{ color: var(--ink); font-size: 0.92rem; flex: 1; }}
+    .mix-score {{ font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--accent); }}
 
-    /* Analyzer's Camelot wheel: centered, capped width. */
-    .an-wheel {{
-        display: flex; justify-content: center;
-    }}
-    .an-wheel svg {{
-        width: min(100%, 420px); height: auto;
-        filter: drop-shadow(0 0 22px rgba(0,245,212,0.1));
-    }}
+    .an-wheel {{ display: flex; justify-content: center; }}
+    .an-wheel svg {{ width: min(100%, 420px); height: auto; }}
 
     .prem-badge {{
         font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; font-weight: 600;
         letter-spacing: 0.12em; vertical-align: middle; margin-left: 0.5rem;
-        padding: 0.15rem 0.5rem; border-radius: 999px; color: #0a0a0f;
-        background: linear-gradient(120deg, {ACCENT}, {ACCENT_2});
+        padding: 0.15rem 0.5rem; border-radius: 999px; color: #08080b;
+        background: var(--accent);
     }}
 </style>
 """

@@ -21,7 +21,7 @@ from pathlib import Path
 
 from harmonic_playlist import camelot_harmonic_score, key_to_camelot
 
-USER_AGENT = "TrackAnalyzer/1.0 (harmonic playlist builder)"
+USER_AGENT = "Keyflow/1.0 (harmonic set builder; keyflow.dj)"
 LASTFM_URL = "https://ws.audioscrobbler.com/2.0/"
 LB_SEARCH_URL = "https://labs.api.listenbrainz.org/recording-search/json"
 LISTENBRAINZ_URL = "https://labs.api.listenbrainz.org/similar-recordings/json"

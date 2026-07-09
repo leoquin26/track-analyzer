@@ -15,7 +15,7 @@ import pandas as pd
 
 from harmonic_playlist import NOTE_NAMES
 
-PLAYLIST_NAME = "Track Analyzer Set"
+PLAYLIST_NAME = "Keyflow Set"
 SUPPORTED_TAG_TYPES = {".mp3", ".flac", ".ogg", ".m4a", ".aac"}
 
 
@@ -45,7 +45,7 @@ def rekordbox_xml(playlist_df: pd.DataFrame) -> str:
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<DJ_PLAYLISTS Version="1.0.0">\n'
-        '  <PRODUCT Name="Track Analyzer" Version="1.0" Company="Track Analyzer"/>\n'
+        '  <PRODUCT Name="Keyflow" Version="1.0" Company="Keyflow"/>\n'
         f'  <COLLECTION Entries="{len(rows)}">\n'
         + "\n".join(collection) + "\n"
         "  </COLLECTION>\n"
@@ -127,7 +127,7 @@ def traktor_nml(playlist_df: pd.DataFrame) -> str:
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n'
         '<NML VERSION="19">\n'
-        '  <HEAD COMPANY="Track Analyzer" PROGRAM="Track Analyzer"/>\n'
+        '  <HEAD COMPANY="Keyflow" PROGRAM="Keyflow"/>\n'
         f'  <COLLECTION ENTRIES="{len(rows)}">\n'
         + "\n".join(entries) + "\n"
         "  </COLLECTION>\n"

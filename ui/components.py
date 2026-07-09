@@ -201,7 +201,7 @@ def render_app_header(section: str = "Analyzer") -> None:
     brand, _, nav = st.columns([3, 2.4, 0.9], vertical_alignment="center")
     with brand:
         st.markdown(
-            f'<div class="app-brand"><span class="disc"></span>Track Analyzer'
+            f'<div class="app-brand"><span class="disc"></span>Keyflow'
             f'<span class="crumb">/ {section}</span></div>',
             unsafe_allow_html=True,
         )
@@ -310,7 +310,7 @@ def render_setup_panel() -> dict:
         '<div class="setup-kicker">Setup</div>'
         '<h2 class="setup-title">Analyze your library</h2>'
         '<p class="setup-sub">Point at a folder of songs and build a harmonic set. '
-        'Nothing is uploaded — analysis runs locally.</p>'
+        'Nothing is uploaded — every track is analyzed locally and stays on your machine.</p>'
         '<div class="setup-steps">'
         '<span><b>1</b> Choose a folder</span>'
         '<span><b>2</b> Analyze</span>'
@@ -360,8 +360,14 @@ def render_setup_panel() -> dict:
 
     folder = Path(st.session_state.music_folder) if st.session_state.music_folder else None
     count = folder_audio_count(folder, st.session_state.recursive)
-    if count and not uploads:
+    if uploads:
+        pass  # upload tab already confirms the count
+    elif count:
         st.caption(f"✅ Found {count} audio files ready to analyze.")
+    elif st.session_state.music_folder:
+        st.caption("⚠️ No audio files found there yet — check the path, or turn on **Include subfolders**.")
+    else:
+        st.caption("Choose a folder or drop some tracks above to begin.")
 
     return {
         "folder": folder,

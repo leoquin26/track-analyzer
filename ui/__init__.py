@@ -1,1 +1,1 @@
-"""UI package for the Track Analyzer dashboard."""
+"""UI package for the Keyflow dashboard."""

@@ -1,8 +1,10 @@
-# Track Analyzer
+# Keyflow
 
-Build DJ-friendly playlists from a folder of songs. The app analyzes each track for **BPM**, **musical key**, **Camelot code**, **rhythm/groove**, and **energy**, then suggests the best order to mix them.
+*Sets that flow in key.* (formerly Track Analyzer)
 
-Think of it as a basic **Mixed In Key + playlist optimizer**.
+Build DJ-friendly sets from a folder of songs. Keyflow analyzes each track for **BPM**, **musical key**, **Camelot code**, **rhythm/groove**, and **energy**, then suggests the best order to mix them.
+
+Think of it as a basic **Mixed In Key + set optimizer**.
 
 ---
 
