@@ -11,6 +11,7 @@ from __future__ import annotations
 import streamlit as st
 
 from ui.charts import camelot_wheel_svg
+from ui.state import get_secret
 from ui.styles import HOME_CSS
 
 # Monochrome hairline icons (stroke = currentColor -> teal via .feature-icon).
@@ -46,18 +47,20 @@ _STATS = [
     ("∞", "Library size"),
 ]
 
-# (name, price, per, description, [features], featured?, cta_label, cta_key)
+# (name, price, per, description, [features], featured?, cta_label, cta_key, checkout)
+# checkout = (secrets key, env var) for the plan's hosted checkout URL; while it's
+# unset the CTA falls back to opening the app.
 _PLANS = [
     ("Free", "$0", "forever", "Try the full engine on a small crate.",
      ["Up to 50 tracks", "Harmonic ordering", "CSV + M3U export", "Live reordering"],
-     False, "Start free  →", "price_free"),
+     False, "Start free  →", "price_free", None),
     ("Pro", "$12", "/ month", "For working DJs with a real library.",
      ["Unlimited tracks", "rekordbox · Serato · Traktor export",
       "Key + BPM written to tags", "Energy-curve set builder", "Similar-track discovery"],
-     True, "Go Pro  →", "price_pro"),
+     True, "Go Pro  →", "price_pro", ("gumroad_product_url", "TA_GUMROAD_PRODUCT_URL")),
     ("Lifetime", "$149", "once", "Pay once, own it. Limited early-bird.",
      ["Everything in Pro", "All future updates", "Founder's badge", "Priority feature requests"],
-     False, "Get lifetime  →", "price_life"),
+     False, "Get lifetime  →", "price_life", ("gumroad_lifetime_url", "TA_GUMROAD_LIFETIME_URL")),
 ]
 
 
@@ -235,7 +238,7 @@ def _pricing() -> None:
                 '</div>', unsafe_allow_html=True)
     st.write("")
     cols = st.columns(3, gap="medium")
-    for col, (name, price, per, desc, feats, featured, cta_label, cta_key) in zip(cols, _PLANS):
+    for col, (name, price, per, desc, feats, featured, cta_label, cta_key, checkout) in zip(cols, _PLANS):
         with col:
             tag = '<span class="price-tag">Most popular</span>' if featured else ''
             feat_items = "".join(f"<li>{f}</li>" for f in feats)
@@ -251,7 +254,12 @@ def _pricing() -> None:
                 f'</div>',
                 unsafe_allow_html=True,
             )
-            _launch(cta_key, cta_label, kind="primary" if featured else "secondary")
+            kind = "primary" if featured else "secondary"
+            checkout_url = get_secret(*checkout) if checkout else ""
+            if checkout_url:
+                st.link_button(cta_label, checkout_url, type=kind, width="stretch")
+            else:
+                _launch(cta_key, cta_label, kind=kind)
     st.markdown(
         '<p class="lp-hero-note" style="text-align:center">Lifetime early-bird is capped — '
         'price rises as slots fill.</p>',

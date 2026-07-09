@@ -39,8 +39,12 @@
 - Tras editar `ui/`, **reiniciar Streamlit por completo** (cachea submódulos).
 
 ## Próximos pasos (orden sugerido)
-1. **Conectar CTAs de pricing a checkout real** (Gumroad membership para Pro,
-   producto Lifetime). Hoy todos abren el analyzer.
+1. ~~Conectar CTAs de pricing a checkout real~~ **HECHO en código**: Pro y
+   Lifetime usan `st.link_button` hacia `gumroad_product_url` /
+   `gumroad_lifetime_url` (secrets o env `TA_GUMROAD_*_URL`) con fallback al
+   analyzer si no están configuradas. **Falta (lado usuario):** crear el
+   producto *membership* (Pro) y el producto Lifetime en Gumroad y poner las
+   dos URLs en `.streamlit/secrets.toml`.
 2. Estados de carga/vacío del analyzer + QA responsive móvil + accesibilidad AA.
 3. **Fase SaaS 1 — Backend FastAPI** que envuelve `run_analysis()` con cola de
    jobs, storage temporal de audio con borrado, y caché por hash.
