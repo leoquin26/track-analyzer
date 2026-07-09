@@ -196,16 +196,29 @@ def playlist_column_config() -> dict:
 # Metrics + playlist
 # --------------------------------------------------------------------------- #
 
+# Sidebar groups: sections encode intent (what you're trying to do), so the
+# rail reads as a workflow instead of a flat list.
+_NAV_GROUPS = [
+    ("Start", ["Overview", "Analyze"]),
+    ("Build", ["Set builder", "Inspector", "Discover"]),
+    ("Review", ["Insights", "Data"]),
+    ("Ship", ["Export"]),
+]
+
+
 def render_sidebar_nav(modules: list[str], active: str) -> None:
-    """The app rail: brand, module navigation, library status, Home."""
+    """The app rail: brand, grouped module navigation, library status, Home."""
     with st.sidebar:
         st.markdown('<div class="sb-brand"><span class="disc"></span>Keyflow</div>',
                     unsafe_allow_html=True)
-        st.markdown('<div class="sb-section">Workspace</div>', unsafe_allow_html=True)
-        for module in modules:
-            slug = module.replace(" ", "_")
-            st.button(module, key=f"nv_{slug}", width="stretch",
-                      on_click=state.goto_module, args=(module,))
+        for section, group in _NAV_GROUPS:
+            st.markdown(f'<div class="sb-section">{section}</div>', unsafe_allow_html=True)
+            for module in group:
+                if module not in modules:
+                    continue
+                slug = module.replace(" ", "_")
+                st.button(module, key=f"nv_{slug}", width="stretch",
+                          on_click=state.goto_module, args=(module,))
 
         tracks = st.session_state.tracks
         if tracks:
@@ -225,12 +238,15 @@ def render_sidebar_nav(modules: list[str], active: str) -> None:
         if st.button("← Home page", key="nav_home", width="stretch"):
             st.switch_page(st.session_state["_home_page"])
 
-    # Active item: ink text + inset teal indicator, injected per run.
+    # Active item: filled row + flat mint bar. Selector mirrors the base rule's
+    # specificity so this later-injected style wins the tie.
     active_slug = active.replace(" ", "_")
     st.markdown(
-        f"<style>.st-key-nv_{active_slug} button {{"
-        f"color: var(--ink) !important; background: var(--surface-2) !important;"
-        f"box-shadow: inset 2px 0 0 var(--accent);"
+        f'<style>section[data-testid="stSidebar"] .st-key-nv_{active_slug} button,'
+        f'section[data-testid="stSidebar"] .st-key-nv_{active_slug} button[kind="secondary"] {{'
+        f"color: var(--ink) !important; background: rgba(94,234,212,0.08) !important;"
+        f"box-shadow: inset 3px 0 0 0 var(--accent) !important;"
+        f"border-radius: 4px 10px 10px 4px !important;"
         f"}}</style>",
         unsafe_allow_html=True,
     )

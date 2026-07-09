@@ -1,11 +1,10 @@
-# Theme: keep native widget accents (selected states, focus rings, spinners)
-# aligned with the app's teal/purple identity instead of Streamlit's red.
+# Theme: native widget accents aligned with the warm-dark Keyflow identity.
 [theme]
 base = "dark"
-primaryColor = "#00f5d4"
-backgroundColor = "#0a0a0f"
-secondaryBackgroundColor = "#12121a"
-textColor = "#ffffff"
+primaryColor = "#5eead4"
+backgroundColor = "#121016"
+secondaryBackgroundColor = "#1a1720"
+textColor = "#f2efea"
 
 [browser]
 gatherUsageStats = false

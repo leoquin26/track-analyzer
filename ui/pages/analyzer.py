@@ -87,8 +87,8 @@ def _energy_sparkline(ordered: list[dict]) -> str:
     area = f"0,60 {line} 220,60"
     return (
         '<svg viewBox="0 0 220 60" preserveAspectRatio="none" style="width:100%;height:56px">'
-        f'<polyline points="{area}" fill="rgba(0,245,212,0.08)" stroke="none"/>'
-        f'<polyline class="spark-line" points="{line}" fill="none" stroke="#00f5d4" '
+        f'<polyline points="{area}" fill="rgba(94,234,212,0.08)" stroke="none"/>'
+        f'<polyline class="spark-line" points="{line}" fill="none" stroke="#5eead4" '
         'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>'
     )
 

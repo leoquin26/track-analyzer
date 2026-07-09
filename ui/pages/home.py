@@ -70,23 +70,25 @@ def _launch(key: str, label: str = "Open Keyflow  →", kind: str = "primary") -
 
 
 def _navbar() -> None:
-    brand, links, cta = st.columns([1.4, 2, 1], vertical_alignment="center")
-    with brand:
-        st.markdown(
-            '<div class="lp-brand"><span class="disc"></span>Keyflow</div>',
-            unsafe_allow_html=True,
-        )
-    with links:
-        st.markdown(
-            '<div class="lp-links">'
-            '<a href="#capabilities">Capabilities</a>'
-            '<a href="#how-it-works">How it works</a>'
-            '<a href="#pricing">Pricing</a>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-    with cta:
-        _launch("nav_launch", "Open Keyflow  →")
+    # Keyed container -> .st-key-lp_nav: styled as a floating glass pill.
+    with st.container(key="lp_nav"):
+        brand, links, cta = st.columns([1.3, 2, 1], vertical_alignment="center")
+        with brand:
+            st.markdown(
+                '<div class="lp-brand"><span class="disc"></span>Keyflow</div>',
+                unsafe_allow_html=True,
+            )
+        with links:
+            st.markdown(
+                '<div class="lp-links">'
+                '<a href="#capabilities">Capabilities</a>'
+                '<a href="#how-it-works">How it works</a>'
+                '<a href="#pricing">Pricing</a>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+        with cta:
+            _launch("nav_launch", "Open Keyflow  →")
 
 
 def _hero() -> None:
@@ -156,9 +158,9 @@ def _preview() -> None:
     spark = (
         '<svg viewBox="0 0 200 60" preserveAspectRatio="none" style="width:100%;height:56px">'
         '<polyline points="0,46 40,40 80,30 120,20 160,14 200,10" fill="none" '
-        'stroke="#00f5d4" stroke-width="2.5"/>'
+        'stroke="#5eead4" stroke-width="2.5"/>'
         '<polyline points="0,46 40,40 80,30 120,20 160,14 200,10 200,60 0,60" '
-        'fill="rgba(0,245,212,0.10)" stroke="none"/></svg>'
+        'fill="rgba(94,234,212,0.10)" stroke="none"/></svg>'
     )
     keys = "".join(
         f'<span class="pv-pill {cls}" style="margin:2px">{c}</span>'

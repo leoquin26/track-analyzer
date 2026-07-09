@@ -46,26 +46,26 @@ def camelot_wheel_svg(present: set[str] | None = None) -> str:
                 f"hsl({hue:.0f} 68% {'56%' if letter == 'B' else '46%'})"
                 if lit else "rgba(255,255,255,0.05)"
             )
-            text_fill = "#0a0a0f" if lit else "rgba(255,255,255,0.3)"
+            text_fill = "#14121a" if lit else "rgba(255,255,255,0.3)"
             segments.append(
                 f'<path d="{_annular(r_in, r_out, a0, a1)}" fill="{fill}" '
-                f'stroke="#0a0a0f" stroke-width="1.5"/>'
+                f'stroke="#14121a" stroke-width="1.5"/>'
             )
             amid = math.radians((a0 + a1) / 2)
             rmid = (r_in + r_out) / 2
             lx, ly = _CX + rmid * math.cos(amid), _CY + rmid * math.sin(amid)
             labels.append(
                 f'<text x="{lx:.1f}" y="{ly:.1f}" fill="{text_fill}" font-size="12" '
-                f'font-weight="700" font-family="JetBrains Mono, monospace" '
+                f'font-weight="700" font-family="DM Mono, monospace" '
                 f'text-anchor="middle" dominant-baseline="central">{code}</text>'
             )
     hub = (
-        f'<circle cx="{_CX}" cy="{_CY}" r="70" fill="#0b0b13" '
+        f'<circle cx="{_CX}" cy="{_CY}" r="70" fill="#171420" '
         f'stroke="rgba(255,255,255,0.12)" stroke-width="1"/>'
         f'<text x="{_CX}" y="{_CY - 5}" fill="#fff" font-size="15" font-weight="700" '
-        f'font-family="Syne, sans-serif" text-anchor="middle">CAMELOT</text>'
+        f'font-family="Outfit, sans-serif" text-anchor="middle">CAMELOT</text>'
         f'<text x="{_CX}" y="{_CY + 15}" fill="{ACCENT}" font-size="10" letter-spacing="3" '
-        f'font-family="JetBrains Mono, monospace" text-anchor="middle">WHEEL</text>'
+        f'font-family="DM Mono, monospace" text-anchor="middle">WHEEL</text>'
     )
     return (
         '<svg viewBox="0 0 400 400" class="wheel-svg" role="img" '
@@ -77,7 +77,7 @@ _DARK_LAYOUT = dict(
     template="plotly_dark",
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(family="Space Grotesk, sans-serif"),
+    font=dict(family="Inter, sans-serif"),
     margin=dict(l=20, r=20, t=30, b=20),
 )
 
@@ -122,9 +122,9 @@ def plot_energy_curve(playlist_df: pd.DataFrame) -> go.Figure:
             y=playlist_df["energy"].astype(float),
             mode="lines+markers",
             line=dict(color=ACCENT, width=3, shape="spline"),
-            marker=dict(size=9, color=ACCENT_2, line=dict(color="#0a0a0f", width=1)),
+            marker=dict(size=9, color=ACCENT_2, line=dict(color="#14121a", width=1)),
             fill="tozeroy",
-            fillcolor="rgba(0, 245, 212, 0.08)",
+            fillcolor="rgba(94, 234, 212, 0.08)",
             hovertext=playlist_df["title"],
             hovertemplate="%{hovertext}<br>energy %{y:.1f} dB<extra></extra>",
         )
@@ -145,10 +145,10 @@ def plot_transition_heatmap(matrix_df: pd.DataFrame) -> go.Figure:
         numeric,
         text_auto=".0f",
         color_continuous_scale=[
-            [0.0, "#1a1028"],
-            [0.35, "#4c1d95"],
-            [0.65, "#0f766e"],
-            [1.0, "#00f5d4"],
+            [0.0, "#181523"],
+            [0.35, "#5b4b9e"],
+            [0.65, "#2f8f7d"],
+            [1.0, "#5eead4"],
         ],
         aspect="auto",
     )

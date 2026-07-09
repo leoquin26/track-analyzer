@@ -17,6 +17,13 @@
   `track_suggest.py`) **no importa Streamlit** → se porta directo a FastAPI.
 
 ## Hecho recientemente (UI)
+- **Sistema visual v2 (suave/amigable)**: tipografía Outfit (display) + Inter
+  (cuerpo) + DM Mono (datos); paleta dark cálida (#121016, tinta marfil) con
+  acento menta #5eead4 y lavanda #a78bfa de apoyo (tema nativo en
+  `.streamlit/config.toml`). Navbar de la landing como píldora flotante con
+  blur; sidebar del analyzer agrupado por intención (Start/Build/Review/Ship)
+  con ítem activo relleno + barra menta. Rampa del heatmap actualizada y paleta
+  de series re-validada sobre el fondo nuevo.
 - **Analyzer reestructurado como dashboard**: módulo **Overview** por defecto
   (bienvenida guiada + cards bloqueadas sin análisis; métricas + "What next?"
   con análisis), **Analyze** como módulo propio, y los demás módulos con gating
