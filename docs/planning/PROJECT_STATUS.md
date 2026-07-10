@@ -65,8 +65,17 @@
    producto *membership* (Pro) y el producto Lifetime en Gumroad y poner las
    dos URLs en `.streamlit/secrets.toml`.
 2. Estados de carga/vacío del analyzer + QA responsive móvil + accesibilidad AA.
-3. **Fase SaaS 1 — Backend FastAPI** que envuelve `run_analysis()` con cola de
-   jobs, storage temporal de audio con borrado, y caché por hash.
+3. ~~Fase SaaS 1 — Backend FastAPI~~ **HECHO (MVP)**: `api/main.py` con
+   `POST /v1/auth/register|login`, `/v1/me`, `POST /v1/analyze` (multipart →
+   job en background), `GET /v1/jobs/{id}[/result]`, `POST /v1/playlist`,
+   `POST /v1/export/{fmt}`. Auth compartida con la UI vía `authcore.py`
+   (mismos tokens revocables → un login sirve en ambas superficies), límites
+   de plan aplicados server-side (free: 50 tracks, sin plateau, sin exports
+   DJ), **caché por hash de contenido** y **borrado del audio post-análisis**.
+   Worker in-process (ThreadPool) con tabla `jobs` — contrato listo para
+   migrar a RQ/Redis. Suite e2e en `tests/test_api.py`. Correr:
+   `uvicorn api.main:app --port 8000`. Pendiente de la fase: Postgres/Supabase
+   y storage de objetos cuando se despliegue.
 4. Fase SaaS 2 — Frontend Next.js + auth (Supabase) + persistencia + gating
    Free/Pro. Portar los design tokens y componentes de la landing actual.
 5. Fase SaaS 3 — Billing (LemonSqueezy/Paddle como Merchant of Record) con
