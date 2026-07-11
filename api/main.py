@@ -15,19 +15,25 @@ Design (mirrors docs/planning/track-analyzer-roadmap-saas.md):
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
+import logging
+import os
 import shutil
 import sqlite3
 import tempfile
+import threading
 import time
 import uuid
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import Response
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
@@ -41,13 +47,87 @@ from harmonic_playlist import (
     build_m3u_content,
 )
 
-app = FastAPI(title="Keyflow API", version="1.0.0",
+logger = logging.getLogger("keyflow.api")
+
+
+def _env(name: str, default: str = "") -> str:
+    return os.environ.get(name, default)
+
+
+def _reap_orphan_jobs() -> None:
+    # A process restart leaves in-flight jobs stranded; mark them failed so
+    # clients stop polling forever instead of hanging.
+    with _db() as conn:
+        conn.execute(
+            "UPDATE jobs SET status='error', error='Server restarted mid-analysis"
+            " — please retry.' WHERE status IN ('queued','running')"
+        )
+
+
+@contextlib.asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    _reap_orphan_jobs()
+    yield
+
+
+app = FastAPI(title="Keyflow API", version="1.0.0", lifespan=_lifespan,
               description="Harmonic set building over HTTP. Sets that flow in key.")
 
+# CORS: the browser frontend (Next.js) calls this cross-origin. We use Bearer
+# tokens, not cookies, so we list explicit origins rather than "*".
+_origins = [o.strip() for o in _env(
+    "KEYFLOW_CORS_ORIGINS",
+    "http://localhost:3000,http://localhost:8501").split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=False,
+)
+
 _bearer = HTTPBearer(auto_error=False)
-_executor = ThreadPoolExecutor(max_workers=2)
+_executor = ThreadPoolExecutor(max_workers=int(_env("KEYFLOW_WORKERS", "2")))
 
 ANALYSIS_DURATION_MAX = 300.0  # cost control: cap per-track seconds analyzed
+MAX_FILE_BYTES = int(_env("KEYFLOW_MAX_FILE_MB", "40")) * 1024 * 1024
+MAX_TOTAL_BYTES = int(_env("KEYFLOW_MAX_UPLOAD_MB", "400")) * 1024 * 1024
+MAX_FILES = int(_env("KEYFLOW_MAX_FILES", "500"))
+
+
+# --------------------------------------------------------------------------- #
+# Rate limiting: in-memory sliding window per client IP. Honest limit — it's
+# per-process, so behind N replicas the effective limit is N×. Good enough to
+# stop brute-force / accidental abuse; a shared Redis limiter lands with the
+# multi-instance deploy.
+# --------------------------------------------------------------------------- #
+
+_rate_lock = threading.Lock()
+_rate_hits: dict[str, deque] = {}
+
+
+def rate_limit(bucket: str, limit: int, window: float):
+    def _dep(request: Request) -> None:
+        client = request.client.host if request.client else "anon"
+        key = f"{bucket}:{client}"
+        now = time.time()
+        with _rate_lock:
+            hits = _rate_hits.setdefault(key, deque())
+            while hits and hits[0] < now - window:
+                hits.popleft()
+            if len(hits) >= limit:
+                retry = int(hits[0] + window - now) + 1
+                raise HTTPException(429, f"Too many requests — retry in {retry}s.",
+                                    headers={"Retry-After": str(retry)})
+            hits.append(now)
+    return _dep
+
+
+@app.exception_handler(Exception)
+async def _unhandled(request: Request, exc: Exception):
+    # Never leak a stack trace to clients; log it for us.
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Something went wrong on our end."})
 
 
 # --------------------------------------------------------------------------- #
@@ -106,7 +186,7 @@ class Credentials(BaseModel):
     name: str | None = None
 
 
-@app.post("/v1/auth/register")
+@app.post("/v1/auth/register", dependencies=[Depends(rate_limit("auth", 10, 300))])
 def api_register(body: Credentials):
     user, error = authcore.register(body.email, body.name or body.email.split("@")[0],
                                     body.password)
@@ -115,7 +195,7 @@ def api_register(body: Credentials):
     return {"token": authcore.issue_session(user["id"]), "user": user}
 
 
-@app.post("/v1/auth/login")
+@app.post("/v1/auth/login", dependencies=[Depends(rate_limit("auth", 10, 300))])
 def api_login(body: Credentials):
     user, error = authcore.login(body.email, body.password)
     if not user:
@@ -194,7 +274,26 @@ def _run_job(job_id: str, job_dir: Path, duration: float) -> None:
         shutil.rmtree(job_dir, ignore_errors=True)  # audio never outlives the job
 
 
-@app.post("/v1/analyze")
+def _save_within_limits(upload: UploadFile, dest: Path, remaining: int) -> int:
+    """Stream an upload to disk, aborting if it blows the per-file or total cap.
+    Returns bytes written. Never buffers the whole file in memory."""
+    written = 0
+    with dest.open("wb") as out:
+        while chunk := upload.file.read(1024 * 1024):
+            written += len(chunk)
+            if written > MAX_FILE_BYTES:
+                raise HTTPException(
+                    413, f"{upload.filename} exceeds the "
+                         f"{MAX_FILE_BYTES // 1024 // 1024} MB per-file limit.")
+            if written > remaining:
+                raise HTTPException(
+                    413, f"Upload exceeds the "
+                         f"{MAX_TOTAL_BYTES // 1024 // 1024} MB total limit.")
+            out.write(chunk)
+    return written
+
+
+@app.post("/v1/analyze", dependencies=[Depends(rate_limit("analyze", 20, 3600))])
 def api_analyze(files: list[UploadFile] = File(...),
                 duration: float = Form(180.0),
                 user: dict = Depends(current_user)):
@@ -204,6 +303,8 @@ def api_analyze(files: list[UploadFile] = File(...),
              if Path(f.filename or "").suffix.lower() in AUDIO_EXTENSIONS]
     if not audio:
         raise HTTPException(400, f"No audio files. Supported: {sorted(AUDIO_EXTENSIONS)}")
+    if len(audio) > MAX_FILES:
+        raise HTTPException(413, f"Too many files at once (max {MAX_FILES}).")
 
     max_tracks = _cap(user, "max_tracks")
     if max_tracks is not None and len(audio) > max_tracks:
@@ -214,8 +315,14 @@ def api_analyze(files: list[UploadFile] = File(...),
 
     job_id = uuid.uuid4().hex
     job_dir = Path(tempfile.mkdtemp(prefix=f"kf_job_{job_id[:8]}_"))
-    for upload in audio:
-        (job_dir / Path(upload.filename).name).write_bytes(upload.file.read())
+    remaining = MAX_TOTAL_BYTES
+    try:
+        for upload in audio:
+            dest = job_dir / Path(upload.filename).name
+            remaining -= _save_within_limits(upload, dest, remaining)
+    except HTTPException:
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise
 
     with _db() as conn:
         conn.execute(

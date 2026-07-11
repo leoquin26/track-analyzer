@@ -1,7 +1,10 @@
 """End-to-end test of the Keyflow API against a temp DB and real synthetic audio."""
 import pathlib
+import sys
 import tempfile
 import time
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 import authcore
 

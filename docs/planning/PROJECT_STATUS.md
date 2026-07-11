@@ -16,6 +16,17 @@
 - Ventaja clave: el motor (`harmonic_playlist.py`, `dj_export.py`,
   `track_suggest.py`) **no importa Streamlit** → se porta directo a FastAPI.
 
+## Hecho recientemente (API / producción)
+- **Endurecimiento de la API para SaaS** (`api/main.py`): CORS con orígenes
+  explícitos (`KEYFLOW_CORS_ORIGINS`, Bearer no cookies), **límites de upload**
+  por-archivo/total/conteo con lectura en streaming (413 sin cargar en RAM),
+  **rate limiting** por IP en auth (10/5min) y analyze (20/h), reaper de jobs
+  huérfanos al arrancar (lifespan), y handler 500 que no filtra stack traces.
+  Suites `tests/test_api.py` + `tests/test_api_hardening.py` (todas PASS).
+- **Pendiente para el deploy SaaS**: SQLite→Postgres/Supabase (cuentas efímeras
+  en cloud), storage de objetos (R2) para uploads grandes, worker durable
+  (RQ/Redis), CSP para el token en cookie, email SMTP real, monitoreo (Sentry).
+
 ## Hecho recientemente (UI)
 - **Límites de auth resueltos**: sesión persistente por cookie (`kf_session`,
   token hasheado en DB, TTL 30 días, escritura diferida al run siguiente para
