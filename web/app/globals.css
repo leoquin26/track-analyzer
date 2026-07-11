@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+/* Keyflow design system — warm dark, soft mint accent. Ported from the
+   Streamlit app so the web and desktop surfaces share one visual language. */
+@theme {
+  --font-display: var(--font-outfit), sans-serif;
+  --font-sans: var(--font-inter), sans-serif;
+  --font-mono: var(--font-dm-mono), monospace;
+
+  --color-bg: #121016;
+  --color-ink: #f2efea;
+  --color-mint: #5eead4;
+  --color-lavender: #a78bfa;
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-surface: rgba(255, 255, 255, 0.03);
+  --color-surface-2: rgba(255, 255, 255, 0.05);
+
+  --ease-fluid: cubic-bezier(0.22, 0.9, 0.35, 1);
+}
+
+:root {
+  --muted: rgba(242, 239, 234, 0.58);
+  --faint: rgba(242, 239, 234, 0.4);
+}
+
+body {
+  background:
+    radial-gradient(1100px 520px at 50% -280px, rgba(94, 234, 212, 0.06), transparent 70%),
+    var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-rise {
+  animation: rise 0.5s var(--ease-fluid) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .wheel-halo {
+    animation: none !important;
+  }
+}
+
+::selection {
+  background: rgba(94, 234, 212, 0.25);
+}
