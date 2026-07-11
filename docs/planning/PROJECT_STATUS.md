@@ -16,6 +16,20 @@
 - Ventaja clave: el motor (`harmonic_playlist.py`, `dj_export.py`,
   `track_suggest.py`) **no importa Streamlit** → se porta directo a FastAPI.
 
+## Hecho recientemente (SaaS Fase 2 — web)
+- **Arrancó el frontend Next.js** en `web/` (Next 16 + React 19 + Tailwind v4 +
+  TS). Sistema de diseño portado: Outfit/Inter/DM Mono (next/font), paleta
+  warm-dark + menta/lavanda como tokens `@theme`, y la **rueda Camelot** como
+  componente TSX. **Landing completa** portada del Streamlit (navbar píldora,
+  hero, stats, capabilities, how-it-works, pricing, footer). Build de prod
+  limpio, verificada en navegador. Correr: `cd web && npm run dev` (:3000).
+- **Decisión de arquitectura** (spec `2026-07-11-...`): usar **Supabase Auth**
+  (no nuestras sesiones authcore) — trae verificación de email, reset, sesiones
+  SSR y social gratis; la FastAPI validará el JWT de Supabase y leerá el rol de
+  una tabla `profiles`. Entitlements siguen siendo la fuente única.
+- **BLOQUEADO en el usuario para el incremento 2**: crear el proyecto Supabase
+  y dar `NEXT_PUBLIC_SUPABASE_URL`, anon key, service role key y JWT secret.
+
 ## Hecho recientemente (API / producción)
 - **Endurecimiento de la API para SaaS** (`api/main.py`): CORS con orígenes
   explícitos (`KEYFLOW_CORS_ORIGINS`, Bearer no cookies), **límites de upload**
