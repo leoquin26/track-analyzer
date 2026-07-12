@@ -387,14 +387,18 @@ def api_job_result(job_id: str, user: dict = Depends(current_user)):
 # --------------------------------------------------------------------------- #
 
 class PlaylistRequest(BaseModel):
-    job_id: str
+    job_id: str | None = None
+    set_id: str | None = None  # exports can come from a saved set, not just a job
     weights: dict[str, float] | None = None
     start_title: str | None = None
     energy_curve: str = "build_up"
     exclude_titles: list[str] = []
 
 
-def _build(body: PlaylistRequest, user: dict):
+def _order_tracks(tracks: list[dict], body, user: dict):
+    """Validate ordering params and run the engine. `body` is any model with
+    weights/start_title/energy_curve/exclude_titles (PlaylistRequest, SetCreate,
+    SetRebuild)."""
     if body.energy_curve not in ("build_up", "plateau"):
         raise HTTPException(400, "energy_curve must be 'build_up' or 'plateau'.")
     if body.energy_curve == "plateau" and not _cap(user, "energy_curve"):
@@ -403,13 +407,29 @@ def _build(body: PlaylistRequest, user: dict):
     if set(weights) != set(DEFAULT_WEIGHTS):
         raise HTTPException(400, f"weights keys must be {sorted(DEFAULT_WEIGHTS)}.")
 
-    tracks, _failed = _job_tracks(body.job_id, user)
     playlist = build_playlist(tracks, weights=weights, start_title=body.start_title,
                               energy_curve=body.energy_curve,
                               exclude_titles=body.exclude_titles)
     if not playlist:
         raise HTTPException(400, "Every track was excluded — nothing to order.")
     return playlist, weights
+
+
+def _build(body: PlaylistRequest, user: dict):
+    if body.set_id:
+        # A saved set exports/plays back in its SAVED order (manual edits and
+        # all) — no rebuild here.
+        row = _get_set_row(body.set_id, user)
+        tracks = _hydrate_tracks(row["playlist"]["tracks"])
+        playlist = _in_saved_order(tracks, row["playlist"]["order"])
+        if not playlist:
+            raise HTTPException(400, "This set is empty.")
+        weights = {**DEFAULT_WEIGHTS, **((row["params"] or {}).get("weights") or {})}
+        return playlist, weights
+    if not body.job_id:
+        raise HTTPException(400, "Send a job_id or a set_id.")
+    tracks, _failed = _job_tracks(body.job_id, user)
+    return _order_tracks(tracks, body, user)
 
 
 @app.post("/v1/playlist")
@@ -446,6 +466,187 @@ def api_export(fmt: str, body: PlaylistRequest, user: dict = Depends(current_use
     if fmt == "serato":
         return Response(dx.serato_crate(frame), media_type="application/octet-stream")
     return Response(dx.traktor_nml(frame), media_type="application/xml")
+
+
+# --------------------------------------------------------------------------- #
+# Saved sets — features persist in Supabase (public.sets), audio never does.
+# Self-contained: reorder/rebuild/export forever without the original job.
+# --------------------------------------------------------------------------- #
+
+class SetCreate(BaseModel):
+    job_id: str
+    name: str
+    weights: dict[str, float] | None = None
+    start_title: str | None = None
+    energy_curve: str = "build_up"
+    exclude_titles: list[str] = []
+
+
+class SetRebuild(BaseModel):
+    weights: dict[str, float] | None = None
+    start_title: str | None = None
+    energy_curve: str = "build_up"
+    exclude_titles: list[str] = []
+
+
+class SetUpdate(BaseModel):
+    name: str | None = None
+    order: list[str] | None = None  # manual reorder (permutation of the set)
+    rebuild: SetRebuild | None = None  # or re-run the greedy build
+
+
+def _require_supabase_user(user: dict) -> str:
+    # Saved sets live in Supabase; authcore (Streamlit-era) accounts don't
+    # have rows there. The web is the surface that offers this feature.
+    if not user.get("supabase"):
+        raise HTTPException(403, "Saved sets need a Keyflow web account.")
+    return str(user["id"])
+
+
+def _clean_set_name(name: str) -> str:
+    name = " ".join((name or "").split())
+    if not name:
+        raise HTTPException(400, "Give the set a name.")
+    return name[:120]
+
+
+def _hydrate_tracks(stored: list[dict]) -> list[dict]:
+    tracks = [dict(t) for t in stored]
+    for track in tracks:  # numpy back for the scoring engine
+        track["rhythm_vector"] = np.array(track["rhythm_vector"], dtype=float)
+    return tracks
+
+
+def _in_saved_order(tracks: list[dict], order: list[str]) -> list[dict]:
+    by_title = {t["title"]: t for t in tracks}
+    return [by_title[title] for title in order if title in by_title]
+
+
+def _sets_store():
+    from api import sets_store
+
+    return sets_store
+
+
+def _storage_error() -> HTTPException:
+    logger.exception("sets storage unreachable")
+    return HTTPException(503, "Saved sets are unavailable right now — try again shortly.")
+
+
+def _get_set_row(set_id: str, user: dict) -> dict:
+    uid = _require_supabase_user(user)
+    try:
+        uuid.UUID(set_id)
+    except ValueError:
+        raise HTTPException(404, "No such set.")
+    try:
+        row = _sets_store().get_set(uid, set_id)
+    except Exception:  # noqa: BLE001
+        raise _storage_error()
+    if not row:
+        raise HTTPException(404, "No such set.")
+    return row
+
+
+def _set_detail(row: dict) -> dict:
+    tracks = _hydrate_tracks(row["playlist"]["tracks"])
+    playlist = _in_saved_order(tracks, row["playlist"]["order"])
+    weights = {**DEFAULT_WEIGHTS, **((row["params"] or {}).get("weights") or {})}
+    frame = build_playlist_dataframe(playlist, weights)
+    return {"id": row["id"], "name": row["name"], "params": row["params"],
+            "created_at": row["created_at"], "updated_at": row["updated_at"],
+            "track_count": len(playlist),
+            "playlist": json.loads(frame.to_json(orient="records"))}
+
+
+@app.post("/v1/sets")
+def api_set_create(body: SetCreate, user: dict = Depends(current_user)):
+    uid = _require_supabase_user(user)
+    name = _clean_set_name(body.name)
+    tracks, _failed = _job_tracks(body.job_id, user)
+    playlist, weights = _order_tracks(tracks, body, user)
+
+    stored = [{**t, "rhythm_vector": [float(x) for x in t["rhythm_vector"]]}
+              for t in tracks]
+    params = {"weights": weights, "start_title": body.start_title,
+              "energy_curve": body.energy_curve,
+              "exclude_titles": body.exclude_titles, "manual": False}
+    try:
+        row = _sets_store().create_set(uid, name, stored,
+                                       [t["title"] for t in playlist], params)
+    except Exception:  # noqa: BLE001
+        raise _storage_error()
+    return _set_detail(row)
+
+
+@app.get("/v1/sets")
+def api_sets(user: dict = Depends(current_user)):
+    uid = _require_supabase_user(user)
+    try:
+        rows = _sets_store().list_sets(uid)
+    except Exception:  # noqa: BLE001
+        raise _storage_error()
+    return {"sets": [{"id": r["id"], "name": r["name"],
+                      "created_at": r["created_at"], "updated_at": r["updated_at"],
+                      "track_count": len(r.get("track_order") or [])}
+                     for r in rows]}
+
+
+@app.get("/v1/sets/{set_id}")
+def api_set(set_id: str, user: dict = Depends(current_user)):
+    return _set_detail(_get_set_row(set_id, user))
+
+
+@app.put("/v1/sets/{set_id}")
+def api_set_update(set_id: str, body: SetUpdate, user: dict = Depends(current_user)):
+    row = _get_set_row(set_id, user)
+    if body.order is not None and body.rebuild is not None:
+        raise HTTPException(400, "Send either a manual order or a rebuild, not both.")
+
+    fields: dict = {}
+    playlist_doc = row["playlist"]
+    params = dict(row["params"] or {})
+
+    if body.name is not None:
+        fields["name"] = _clean_set_name(body.name)
+
+    if body.order is not None:
+        if sorted(body.order) != sorted(playlist_doc["order"]):
+            raise HTTPException(400, "order must be a permutation of the set's tracks.")
+        playlist_doc = {**playlist_doc, "order": body.order}
+        params["manual"] = True
+        fields["playlist"] = playlist_doc
+        fields["params"] = params
+
+    if body.rebuild is not None:
+        tracks = _hydrate_tracks(playlist_doc["tracks"])
+        playlist, weights = _order_tracks(tracks, body.rebuild, user)
+        playlist_doc = {**playlist_doc, "order": [t["title"] for t in playlist]}
+        params = {"weights": weights, "start_title": body.rebuild.start_title,
+                  "energy_curve": body.rebuild.energy_curve,
+                  "exclude_titles": body.rebuild.exclude_titles, "manual": False}
+        fields["playlist"] = playlist_doc
+        fields["params"] = params
+
+    if not fields:
+        raise HTTPException(400, "Nothing to update.")
+    try:
+        updated = _sets_store().update_set(str(user["id"]), set_id, fields)
+    except Exception:  # noqa: BLE001
+        raise _storage_error()
+    if not updated:
+        raise HTTPException(404, "No such set.")
+    return _set_detail(updated)
+
+
+@app.delete("/v1/sets/{set_id}")
+def api_set_delete(set_id: str, user: dict = Depends(current_user)):
+    _get_set_row(set_id, user)  # 404 (and ownership) before touching anything
+    try:
+        deleted = _sets_store().delete_set(str(user["id"]), set_id)
+    except Exception:  # noqa: BLE001
+        raise _storage_error()
+    return {"ok": bool(deleted)}
 
 
 @app.get("/v1/health")

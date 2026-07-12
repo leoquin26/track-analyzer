@@ -33,6 +33,27 @@ export type PlaylistRow = {
   energy_score: number | null;
 };
 
+/** Saved-set summary as returned by GET /v1/sets. */
+export type SetSummary = {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  track_count: number;
+};
+
+/** Full saved set: summary + params + scored rows in saved order. */
+export type SetDetail = SetSummary & {
+  params: {
+    weights?: Record<string, number>;
+    start_title?: string | null;
+    energy_curve?: string;
+    exclude_titles?: string[];
+    manual?: boolean;
+  } | null;
+  playlist: PlaylistRow[];
+};
+
 export function apiUrl(): string {
   return (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
 }

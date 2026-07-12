@@ -3,7 +3,8 @@
 // Analyze module — the first real workspace module. Uploads audio to the
 // FastAPI with the Supabase access token, follows the job, then renders the
 // ordered set with an energy arc and exports. No audio is ever stored:
-// the engine deletes uploads right after feature extraction.
+// the engine deletes uploads right after feature extraction. From here a
+// result can be kept as a saved set (features only) for the Set builder.
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -12,6 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { JobStatus, PlaylistRow } from "@/lib/api";
 import { AUDIO_EXTENSIONS, apiDetail, apiUrl, formatBytes, isAudioFile } from "@/lib/api";
 import type { Role } from "@/lib/entitlements";
+import { EnergyArc, ExportRow, MetricChips, PlaylistTable } from "@/components/set/SetResults";
 
 type Phase =
   | { kind: "pick" }
@@ -27,63 +29,6 @@ const DURATIONS: [number, string, string][] = [
   [300, "Deep", "First 5 min per track"],
 ];
 
-const EXPORTS: [string, string, string, boolean][] = [
-  // fmt, label, filename, pro-only
-  ["csv", "CSV", "keyflow_set.csv", false],
-  ["m3u", "M3U", "keyflow_set.m3u", false],
-  ["rekordbox", "rekordbox XML", "keyflow_set.xml", true],
-  ["serato", "Serato crate", "keyflow_set.crate", true],
-  ["traktor", "Traktor NML", "keyflow_set.nml", true],
-];
-
-/** Same hue mapping as the Camelot wheel: number → hue, ring → lightness. */
-function camelotColor(code: string): string {
-  const num = parseInt(code, 10);
-  if (!Number.isFinite(num)) return "var(--color-mint)";
-  const hue = ((num - 1) / 12) * 360;
-  return `hsl(${hue.toFixed(0)} 62% ${code.toUpperCase().endsWith("B") ? 64 : 54}%)`;
-}
-
-function EnergyArc({ rows }: { rows: PlaylistRow[] }) {
-  if (rows.length < 2) return null;
-  const energies = rows.map((r) => r.energy);
-  const min = Math.min(...energies);
-  const max = Math.max(...energies);
-  const span = max - min || 1;
-  const W = 560;
-  const H = 96;
-  const pad = 10;
-  const x = (i: number) => pad + (i / (rows.length - 1)) * (W - 2 * pad);
-  const y = (e: number) => H - pad - ((e - min) / span) * (H - 2 * pad);
-  const points = rows.map((r, i) => `${x(i).toFixed(1)},${y(r.energy).toFixed(1)}`);
-  return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className="h-24 w-full"
-      role="img"
-      aria-label="Energy across the set, in playing order"
-    >
-      <polygon
-        points={`${pad},${H - pad} ${points.join(" ")} ${W - pad},${H - pad}`}
-        fill="rgba(94,234,212,0.09)"
-      />
-      <polyline
-        points={points.join(" ")}
-        fill="none"
-        stroke="var(--color-mint)"
-        strokeWidth="2"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-      {rows.map((r, i) => (
-        <circle key={r.order} cx={x(i)} cy={y(r.energy)} r="3" fill="var(--color-mint)">
-          <title>{`${r.order}. ${r.title} — ${r.energy.toFixed(1)} dB`}</title>
-        </circle>
-      ))}
-    </svg>
-  );
-}
-
 export default function AnalyzeClient({
   role,
   maxTracks,
@@ -98,6 +43,10 @@ export default function AnalyzeClient({
   const [phase, setPhase] = useState<Phase>({ kind: "pick" });
   const [dragOver, setDragOver] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
+  const [setName, setSetName] = useState("");
+  const [savingSet, setSavingSet] = useState(false);
+  const [savedSet, setSavedSet] = useState<{ id: string; name: string } | null>(null);
+  const [saveNote, setSaveNote] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const cancelled = useRef(false);
 
@@ -130,6 +79,9 @@ export default function AnalyzeClient({
       return;
     }
     setExportNote(null);
+    setSavedSet(null);
+    setSaveNote(null);
+    setSetName(`Set ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`);
     setPhase({ kind: "uploading" });
 
     const form = new FormData();
@@ -244,9 +196,36 @@ export default function AnalyzeClient({
     }
   }
 
+  async function saveSet() {
+    if (phase.kind !== "done") return;
+    const bearer = await token();
+    if (!bearer) return;
+    setSavingSet(true);
+    setSaveNote(null);
+    try {
+      const res = await fetch(`${apiUrl()}/v1/sets`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: phase.jobId, name: setName }),
+      });
+      if (!res.ok) {
+        setSaveNote(await apiDetail(res));
+        return;
+      }
+      const detail = await res.json();
+      setSavedSet({ id: detail.id, name: detail.name });
+    } catch {
+      setSaveNote("Couldn't reach the engine to save the set.");
+    } finally {
+      setSavingSet(false);
+    }
+  }
+
   function reset() {
     setFiles([]);
     setExportNote(null);
+    setSavedSet(null);
+    setSaveNote(null);
     setPhase({ kind: "pick" });
   }
 
@@ -263,31 +242,11 @@ export default function AnalyzeClient({
   // ------------------------------------------------------------------ done —
   if (phase.kind === "done") {
     const { rows, failed, cachedHits } = phase;
-    const avgBpm = rows.reduce((s, r) => s + r.bpm, 0) / rows.length;
-    const keys = new Map<string, number>();
-    rows.forEach((r) => keys.set(r.camelot, (keys.get(r.camelot) || 0) + 1));
-    const topKey = [...keys.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
-    const scored = rows.filter((r) => r.transition_score_from_previous !== null);
-    const avgScore = scored.length
-      ? scored.reduce((s, r) => s + (r.transition_score_from_previous || 0), 0) / scored.length
-      : 0;
 
     return (
       <div className="animate-rise">
-        <div className="mt-8 grid gap-3 sm:grid-cols-4">
-          {[
-            [String(rows.length), "tracks in the set"],
-            [avgBpm.toFixed(1), "average BPM"],
-            [topKey, "most common key"],
-            [avgScore.toFixed(1), "avg transition score"],
-          ].map(([value, label]) => (
-            <div key={label} className="rounded-2xl border border-line bg-surface p-4">
-              <div className="font-mono text-2xl font-semibold text-mint">{value}</div>
-              <div className="mt-1 text-xs uppercase tracking-[0.14em] text-[color:var(--faint)]">
-                {label}
-              </div>
-            </div>
-          ))}
+        <div className="mt-8">
+          <MetricChips rows={rows} />
         </div>
 
         <div className="mt-6 rounded-2xl border border-line bg-surface p-5">
@@ -302,47 +261,8 @@ export default function AnalyzeClient({
           </div>
         </div>
 
-        <div className="mt-6 overflow-x-auto rounded-2xl border border-line bg-surface">
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-line font-mono text-[0.68rem] uppercase tracking-[0.16em] text-[color:var(--faint)]">
-                <th className="px-4 py-3 font-medium">#</th>
-                <th className="px-4 py-3 font-medium">Track</th>
-                <th className="px-4 py-3 font-medium">Key</th>
-                <th className="px-4 py-3 font-medium">BPM</th>
-                <th className="px-4 py-3 font-medium">Energy</th>
-                <th className="px-4 py-3 font-medium">Transition</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.order} className="border-b border-line/60 last:border-0">
-                  <td className="px-4 py-3 font-mono text-[color:var(--faint)]">{row.order}</td>
-                  <td className="max-w-[280px] truncate px-4 py-3 font-medium">{row.title}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className="inline-block rounded-full border px-2.5 py-0.5 font-mono text-xs font-semibold"
-                      style={{ color: camelotColor(row.camelot), borderColor: "var(--color-line)" }}
-                    >
-                      {row.camelot}
-                    </span>
-                    <span className="ml-2 text-xs text-[color:var(--muted)]">{row.key}</span>
-                  </td>
-                  <td className="px-4 py-3 font-mono">{row.bpm.toFixed(1)}</td>
-                  <td className="px-4 py-3 font-mono text-[color:var(--muted)]">
-                    {row.energy.toFixed(1)} dB
-                  </td>
-                  <td className="px-4 py-3 font-mono">
-                    {row.transition_score_from_previous === null ? (
-                      <span className="text-[color:var(--faint)]">opener</span>
-                    ) : (
-                      row.transition_score_from_previous.toFixed(1)
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-6">
+          <PlaylistTable rows={rows} />
         </div>
 
         {failed.length > 0 && (
@@ -358,35 +278,46 @@ export default function AnalyzeClient({
           </p>
         )}
 
-        <div className="mt-8 rounded-2xl border border-line bg-surface p-5">
-          <h2 className="font-display text-lg font-bold">Take it with you</h2>
+        <div className="mt-8 rounded-2xl border border-mint/25 bg-surface p-5">
+          <h2 className="font-display text-lg font-bold">Keep this set</h2>
           <p className="mt-1 text-sm text-[color:var(--muted)]">
-            CSV and M3U are free. DJ software formats come with Pro.
+            Save the order and analysis to your workspace — reorder and export it any time.
+            The audio itself is never stored.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {EXPORTS.map(([fmt, label, filename, pro]) => {
-              const locked = pro && role === "free";
-              return locked ? (
-                <Link
-                  key={fmt}
-                  href="/#pricing"
-                  className="rounded-full border border-line bg-surface-2 px-4 py-2 text-sm font-semibold text-[color:var(--faint)] transition-colors hover:border-lavender/50 hover:text-lavender"
-                  title={`${label} export is a Pro feature`}
-                >
-                  {label} · Pro
-                </Link>
-              ) : (
-                <button
-                  key={fmt}
-                  onClick={() => download(fmt, filename)}
-                  className="rounded-full border border-mint/40 bg-mint/10 px-4 py-2 text-sm font-semibold text-mint transition-colors hover:bg-mint/20"
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-          {exportNote && <p className="mt-3 text-sm text-[#f2a6c9]">{exportNote}</p>}
+          {savedSet ? (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <span className="text-sm">
+                Saved as <b className="text-mint">{savedSet.name}</b>
+              </span>
+              <Link
+                href={`/app/sets/${savedSet.id}`}
+                className="rounded-full bg-mint px-5 py-2 text-sm font-bold text-[#0c221d] transition-opacity hover:opacity-90"
+              >
+                Open in Set builder →
+              </Link>
+            </div>
+          ) : (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <input
+                value={setName}
+                onChange={(e) => setSetName(e.target.value)}
+                placeholder="Name this set"
+                className="w-64 rounded-full border border-line bg-surface-2 px-4 py-2 text-sm outline-none transition-colors focus:border-mint/60"
+              />
+              <button
+                onClick={saveSet}
+                disabled={savingSet || !setName.trim()}
+                className="rounded-full border border-mint/40 bg-mint/10 px-5 py-2 text-sm font-semibold text-mint transition-colors hover:bg-mint/20 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {savingSet ? "Saving…" : "Save as set"}
+              </button>
+            </div>
+          )}
+          {saveNote && <p className="mt-3 text-sm text-[#f2a6c9]">{saveNote}</p>}
+        </div>
+
+        <div className="mt-6">
+          <ExportRow role={role} onDownload={download} note={exportNote} />
         </div>
 
         <button
@@ -542,7 +473,7 @@ export default function AnalyzeClient({
                 <p className="font-medium">
                   Listening to your tracks{" "}
                   <span className="font-mono text-sm text-mint">
-                    {phase.job.progress}/{phase.job.total}
+                    {Math.round(phase.job.progress * phase.job.total)}/{phase.job.total}
                   </span>
                 </p>
                 {phase.job.cached_hits > 0 && (
@@ -554,9 +485,7 @@ export default function AnalyzeClient({
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-2">
                 <div
                   className="h-full rounded-full bg-mint transition-[width] duration-700"
-                  style={{
-                    width: `${phase.job.total ? (phase.job.progress / phase.job.total) * 100 : 4}%`,
-                  }}
+                  style={{ width: `${Math.max(phase.job.progress * 100, 4)}%` }}
                 />
               </div>
               <p className="mt-3 text-xs text-[color:var(--faint)]">

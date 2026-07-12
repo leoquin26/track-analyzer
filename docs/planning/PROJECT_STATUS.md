@@ -67,14 +67,39 @@
   free: hint de 50 tracks + candados; cache por hash: 2.º análisis instantáneo).
   Correr: API `SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... uvicorn
   api.main:app --port 8000` + `cd web && npm run dev`.
+- **Incremento 4 HECHO — sets persistidos + Set builder.** (a) **API de sets**
+  (`/v1/sets` CRUD + `PUT` con `order` manual o `rebuild`): los features
+  completos (rhythm_vector como lista) + el orden viven en `public.sets` vía
+  PostgREST con la service key (`api/sets_store.py`; **todas las queries
+  filtran `user_id`** — service_role bypassa RLS, ese filtro es la frontera).
+  Un set guardado es autocontenido: se reordena/reconstruye/exporta para
+  siempre sin el job original ni el audio. Reorden manual = permutación
+  validada re-puntuada por el motor; rebuild = greedy con start/curva
+  (plateau gated server-side); `POST /v1/export/{fmt}` ahora acepta `set_id`
+  además de `job_id` (exporta el orden GUARDADO, ediciones manuales
+  incluidas). Sets requieren identidad Supabase (authcore → 403). Suite
+  ampliada a 11 grupos (PASS): create/list/detail, permutación inválida 400,
+  intruso Supabase 404, authcore 403, rebuild plateau, exports por set_id,
+  rename/delete, cascada al borrar usuario. (b) **Web**: "Keep this set" en
+  Analyze (nombre + save → link al builder), **`/app/sets`** (lista
+  server-side leyendo con RLS + estado vacío con CTA) y **`/app/sets/[id]`**
+  (builder: rename inline, delete con doble-click de confirmación, chips de
+  métricas, curva de energía, tabla con **▲▼** re-puntuada por el motor,
+  rebuild con opener + curva — Plateau con candado "· Pro" para free — y
+  exports). Viz compartida en `components/set/SetResults.tsx` (una sola
+  fuente para Analyze y builder). Fix de paso: la barra de progreso de
+  Analyze interpretaba `progress` (0..1) como conteo. **E2E en navegador**:
+  guardar → builder → mover track (manual flag ON) → rebuild con opener
+  (flag OFF) → export M3U → lista → delete → estado vacío.
 - **Para producción**: crear el proyecto Supabase cloud y poner sus llaves en
   `web/.env.local` / Vercel — el mismo código funciona sin cambios; correr
   `npx supabase db push` para aplicar **ambas** migraciones (0001+0002) al
   cloud y verificar con una lectura PostgREST usando la service key (la web
   lee como authenticated y no destapa huecos de grants del service_role).
-- **Siguiente incremento (4)**: persistir sets en Supabase (`sets` ya tiene
-  grants+RLS listos) + módulo Set builder en el web (reorder, start track,
-  energy curve gated); luego Insights/Inspector/Discover.
+- **Siguiente incremento (5)**: módulo **Insights** en el web (rueda Camelot
+  con las keys del set iluminadas — el componente TSX ya existe —, heatmap de
+  compatibilidad, distribución BPM/energía desde los features guardados);
+  después Inspector (correcciones de key/BPM) y Discover (sugerencias).
 
 ## Hecho recientemente (API / producción)
 - **Endurecimiento de la API para SaaS** (`api/main.py`): CORS con orígenes

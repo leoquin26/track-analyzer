@@ -136,4 +136,5 @@ def user_from_token(token: str) -> dict | None:
         "name": name or metadata.get("name") or (claims.get("email", "").split("@")[0]),
         "role": role,
         "verified": True,  # Supabase enforces its own email confirmation policy
+        "supabase": True,  # saved sets & other Supabase-backed features key off this
     }

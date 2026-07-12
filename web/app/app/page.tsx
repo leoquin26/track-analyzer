@@ -9,7 +9,7 @@ import WorkspaceNav from "@/components/workspace/WorkspaceNav";
 const MODULES: [string, string, string | null][] = [
   ["Overview", "Your workspace at a glance — library metrics and where to go next.", null],
   ["Analyze", "Upload tracks and read every song's key, BPM, groove and energy.", "/app/analyze"],
-  ["Set builder", "Your set in playing order — listen, reorder, watch the energy flow.", null],
+  ["Set builder", "Your set in playing order — reorder, rebuild, watch the energy flow.", "/app/sets"],
   ["Inspector", "One track under the microscope — preview, compatibilities, fixes.", null],
   ["Discover", "Find new tracks similar to yours, ranked by how well they'd mix in.", null],
   ["Insights", "The big picture: keys in play and how everything pairs up.", null],

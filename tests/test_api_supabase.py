@@ -149,15 +149,100 @@ assert r.status_code == 200, r.text
 assert len(r.json()["playlist"]) == 2
 print("5. analyze -> job -> playlist con el JWT de Supabase OK")
 
-# 6. limpieza: borrar el usuario cascada el perfil
-r = httpx.delete(f"{SUPABASE_URL}/auth/v1/admin/users/{uid}",
-                 headers=_SVC_HEADERS, timeout=10)
-assert r.status_code in (200, 204), r.text
+# 6. guardar el set: POST /v1/sets desde el job -> detalle + lista
+r = client.post("/v1/sets", json={"job_id": job, "name": "  Friday   warmup  "},
+                headers=H)
+assert r.status_code == 200, r.text
+detail = r.json()
+set_id = detail["id"]
+assert detail["name"] == "Friday warmup"  # espacios normalizados
+assert detail["track_count"] == 2
+assert [row["order"] for row in detail["playlist"]] == [1, 2]
+assert detail["playlist"][0]["camelot"] and detail["playlist"][1]["bpm"]
+r = client.get("/v1/sets", headers=H)
+assert r.status_code == 200
+summary = r.json()["sets"]
+assert len(summary) == 1 and summary[0]["id"] == set_id
+assert summary[0]["track_count"] == 2
+print("6. set guardado desde el job -> detalle con scores + lista OK")
+
+# 7. reorden manual re-puntuado; permutación inválida 400; ownership
+current = [row["title"] for row in detail["playlist"]]
+flipped = list(reversed(current))
+r = client.put(f"/v1/sets/{set_id}", json={"order": flipped}, headers=H)
+assert r.status_code == 200, r.text
+detail = r.json()
+assert [row["title"] for row in detail["playlist"]] == flipped
+assert detail["params"]["manual"] is True
+r = client.put(f"/v1/sets/{set_id}", json={"order": [current[0]]}, headers=H)
+assert r.status_code == 400  # no es permutación
+r = client.put(f"/v1/sets/{set_id}",
+               json={"order": flipped, "rebuild": {"energy_curve": "build_up"}},
+               headers=H)
+assert r.status_code == 400  # order y rebuild juntos no
+# cuenta authcore (opaca) -> los sets viven con cuentas Supabase
+r = client.post("/v1/auth/register",
+                json={"email": "opaco@kf.dj", "password": "password123",
+                      "name": "Opaco"})
+opaque_h = {"Authorization": f"Bearer {r.json()['token']}"}
+assert client.get("/v1/sets", headers=opaque_h).status_code == 403
+# otro usuario Supabase no ve (ni borra) el set ajeno
+r = httpx.post(f"{SUPABASE_URL}/auth/v1/admin/users", headers=_SVC_HEADERS,
+               json={"email": f"intruso-{uuid.uuid4().hex[:8]}@keyflow.test",
+                     "password": "suite-pass-2026", "email_confirm": True},
+               timeout=10)
+intruder_id = r.json()["id"]
+r = httpx.post(f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
+               headers={"apikey": ANON},
+               json={"email": r.json()["email"], "password": "suite-pass-2026"},
+               timeout=10)
+intruder_h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+assert client.get(f"/v1/sets/{set_id}", headers=intruder_h).status_code == 404
+assert client.delete(f"/v1/sets/{set_id}", headers=intruder_h).status_code == 404
+assert client.get("/v1/sets", headers=intruder_h).json()["sets"] == []
+print("7. reorden manual OK; permutación/ambos 400; authcore 403; intruso 404 OK")
+
+# 8. rebuild: start_title + plateau (usuario ya es pro) -> params nuevos
+start = current[0]
+r = client.put(f"/v1/sets/{set_id}",
+               json={"rebuild": {"start_title": start, "energy_curve": "plateau"}},
+               headers=H)
+assert r.status_code == 200, r.text
+detail = r.json()
+assert detail["playlist"][0]["title"] == start
+assert detail["params"]["energy_curve"] == "plateau"
+assert detail["params"]["manual"] is False
+print("8. rebuild con start_title + plateau -> orden y params nuevos OK")
+
+# 9. exports desde el set guardado (sin job): csv/m3u y set_id basura 404
+r = client.post("/v1/export/csv", json={"set_id": set_id}, headers=H)
+assert r.status_code == 200 and start.encode() in r.content
+r = client.post("/v1/export/m3u", json={"set_id": set_id}, headers=H)
+assert r.status_code == 200 and b"#EXTM3U" in r.content
+assert client.post("/v1/export/csv", json={"set_id": "no-es-uuid"},
+                   headers=H).status_code == 404
+assert client.post("/v1/export/csv", json={}, headers=H).status_code == 400
+print("9. exports csv/m3u desde set_id OK; basura 404; sin ids 400 OK")
+
+# 10. rename + delete
+r = client.put(f"/v1/sets/{set_id}", json={"name": "Peak hour"}, headers=H)
+assert r.status_code == 200 and r.json()["name"] == "Peak hour"
+r = client.delete(f"/v1/sets/{set_id}", headers=H)
+assert r.status_code == 200 and r.json()["ok"] is True
+assert client.get(f"/v1/sets/{set_id}", headers=H).status_code == 404
+assert client.get("/v1/sets", headers=H).json()["sets"] == []
+print("10. rename + delete -> set fuera de la lista OK")
+
+# 11. limpieza: borrar usuarios cascada perfiles y sets
+for cleanup_id in (uid, intruder_id):
+    r = httpx.delete(f"{SUPABASE_URL}/auth/v1/admin/users/{cleanup_id}",
+                     headers=_SVC_HEADERS, timeout=10)
+    assert r.status_code in (200, 204), r.text
 r = httpx.get(f"{SUPABASE_URL}/rest/v1/profiles", params={"id": f"eq.{uid}"},
               headers=_SVC_HEADERS, timeout=10)
 assert r.json() == []
 supabase_auth._role_cache.clear()
 assert client.get("/v1/me", headers=H).status_code == 401  # usuario borrado -> anónimo
-print("6. delete usuario -> perfil cascado y token muerto OK")
+print("11. delete usuarios -> perfiles cascados y token muerto OK")
 
 print("RESULT: PASS")
