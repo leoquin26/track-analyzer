@@ -224,16 +224,29 @@ assert client.post("/v1/export/csv", json={"set_id": "no-es-uuid"},
 assert client.post("/v1/export/csv", json={}, headers=H).status_code == 400
 print("9. exports csv/m3u desde set_id OK; basura 404; sin ids 400 OK")
 
-# 10. rename + delete
+# 10. matriz de compatibilidad: N×N en orden guardado, diagonal null
+r = client.get(f"/v1/sets/{set_id}/matrix", headers=H)
+assert r.status_code == 200, r.text
+m = r.json()
+assert m["titles"] == [row["title"] for row in detail["playlist"]]
+n = len(m["titles"])
+assert len(m["matrix"]) == n and all(len(fila) == n for fila in m["matrix"])
+assert all(m["matrix"][i][i] is None for i in range(n))
+assert isinstance(m["matrix"][0][1], (int, float))
+assert client.get(f"/v1/sets/{set_id}/matrix",
+                  headers=intruder_h).status_code == 404
+print("10. matriz de compatibilidad N×N con diagonal null OK")
+
+# 11. rename + delete
 r = client.put(f"/v1/sets/{set_id}", json={"name": "Peak hour"}, headers=H)
 assert r.status_code == 200 and r.json()["name"] == "Peak hour"
 r = client.delete(f"/v1/sets/{set_id}", headers=H)
 assert r.status_code == 200 and r.json()["ok"] is True
 assert client.get(f"/v1/sets/{set_id}", headers=H).status_code == 404
 assert client.get("/v1/sets", headers=H).json()["sets"] == []
-print("10. rename + delete -> set fuera de la lista OK")
+print("11. rename + delete -> set fuera de la lista OK")
 
-# 11. limpieza: borrar usuarios cascada perfiles y sets
+# 12. limpieza: borrar usuarios cascada perfiles y sets
 for cleanup_id in (uid, intruder_id):
     r = httpx.delete(f"{SUPABASE_URL}/auth/v1/admin/users/{cleanup_id}",
                      headers=_SVC_HEADERS, timeout=10)
@@ -243,6 +256,6 @@ r = httpx.get(f"{SUPABASE_URL}/rest/v1/profiles", params={"id": f"eq.{uid}"},
 assert r.json() == []
 supabase_auth._role_cache.clear()
 assert client.get("/v1/me", headers=H).status_code == 401  # usuario borrado -> anónimo
-print("11. delete usuarios -> perfiles cascados y token muerto OK")
+print("12. delete usuarios -> perfiles cascados y token muerto OK")
 
 print("RESULT: PASS")

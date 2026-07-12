@@ -12,7 +12,7 @@ const MODULES: [string, string, string | null][] = [
   ["Set builder", "Your set in playing order — reorder, rebuild, watch the energy flow.", "/app/sets"],
   ["Inspector", "One track under the microscope — preview, compatibilities, fixes.", null],
   ["Discover", "Find new tracks similar to yours, ranked by how well they'd mix in.", null],
-  ["Insights", "The big picture: keys in play and how everything pairs up.", null],
+  ["Insights", "The big picture: keys in play and how everything pairs up.", "/app/insights"],
   ["Export", "Take the set with you — CSV, M3U, and DJ software formats with Pro.", null],
 ];
 

@@ -44,6 +44,7 @@ from harmonic_playlist import (
     analyze_track,
     build_playlist,
     build_playlist_dataframe,
+    build_transition_matrix,
     build_m3u_content,
 )
 
@@ -637,6 +638,22 @@ def api_set_update(set_id: str, body: SetUpdate, user: dict = Depends(current_us
     if not updated:
         raise HTTPException(404, "No such set.")
     return _set_detail(updated)
+
+
+@app.get("/v1/sets/{set_id}/matrix")
+def api_set_matrix(set_id: str, user: dict = Depends(current_user)):
+    """Pairwise compatibility in SAVED order — feeds the Insights heatmap."""
+    row = _get_set_row(set_id, user)
+    tracks = _hydrate_tracks(row["playlist"]["tracks"])
+    playlist = _in_saved_order(tracks, row["playlist"]["order"])
+    if not playlist:
+        raise HTTPException(400, "This set is empty.")
+    weights = {**DEFAULT_WEIGHTS, **((row["params"] or {}).get("weights") or {})}
+    frame = build_transition_matrix(playlist, weights)
+    titles = list(frame.index)
+    matrix = [[None if frame.iloc[i, j] is None else float(frame.iloc[i, j])
+               for j in range(len(titles))] for i in range(len(titles))]
+    return {"titles": titles, "matrix": matrix}
 
 
 @app.delete("/v1/sets/{set_id}")

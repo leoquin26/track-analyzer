@@ -96,10 +96,24 @@
   `npx supabase db push` para aplicar **ambas** migraciones (0001+0002) al
   cloud y verificar con una lectura PostgREST usando la service key (la web
   lee como authenticated y no destapa huecos de grants del service_role).
-- **Siguiente incremento (5)**: módulo **Insights** en el web (rueda Camelot
-  con las keys del set iluminadas — el componente TSX ya existe —, heatmap de
-  compatibilidad, distribución BPM/energía desde los features guardados);
-  después Inspector (correcciones de key/BPM) y Discover (sugerencias).
+- **Incremento 5 HECHO — módulo Insights.** (a) API:
+  `GET /v1/sets/{id}/matrix` — matriz de compatibilidad N×N vía
+  `build_transition_matrix` del motor sobre los features guardados, en el
+  orden GUARDADO del set, diagonal null (suite: 12 grupos PASS). (b) Web
+  **`/app/insights`**: selector de set (cuando hay >1; default el más
+  reciente), **rueda Camelot iluminada** con las keys presentes (el
+  componente TSX de la landing con su prop `present`) + chips de key mix,
+  **scatter BPM×energía** (puntos coloreados por key, ejes mono), y
+  **heatmap "Who pairs with whom"** (SVG: menta = buena transición, rosa =
+  choque, intensidad por |score| normalizado, números de orden + leyenda,
+  tooltips con el par y su score). Estado vacío con CTA a Analyze, y
+  cross-link "Open this set in the builder". E2E en navegador con un set
+  demo de 4 tracks (9A/8A/6A/5A): rueda con 4 segmentos encendidos, heatmap
+  con los pares adyacentes brillantes.
+- **Siguiente incremento (6)**: módulo **Inspector** en el web (corrección
+  de key/BPM sobre un set guardado — necesita `PUT /v1/sets/{id}` con
+  override de features + re-score) y **Discover** (sugerencias vía
+  `track_suggest.py` expuesto en la API, gated a Pro).
 
 ## Hecho recientemente (API / producción)
 - **Endurecimiento de la API para SaaS** (`api/main.py`): CORS con orígenes
