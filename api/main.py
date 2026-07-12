@@ -166,9 +166,25 @@ def _db() -> sqlite3.Connection:
 # --------------------------------------------------------------------------- #
 
 def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
-    user = authcore.restore_session(credentials.credentials if credentials else None)
-    if not user:
+    token = credentials.credentials if credentials else None
+    if not token:
         raise HTTPException(401, "Sign in first — send 'Authorization: Bearer <token>'.")
+
+    # Dual auth: Supabase access tokens are JWTs (two dots); authcore session
+    # tokens are opaque urlsafe strings. One API, both surfaces.
+    if token.count(".") == 2:
+        from api import supabase_auth
+
+        if not supabase_auth.configured():
+            raise HTTPException(
+                401, "This deployment doesn't accept Supabase tokens "
+                     "(SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY unset).")
+        user = supabase_auth.user_from_token(token)
+    else:
+        user = authcore.restore_session(token)
+
+    if not user:
+        raise HTTPException(401, "Session expired or invalid — sign in again.")
     return user
 
 

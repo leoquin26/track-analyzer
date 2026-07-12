@@ -37,11 +37,44 @@
   signout. **E2E verificado en navegador**: signup→trigger crea perfil free→
   /app muestra plan→rol a pro via SQL→UI refleja "unlimited"→signout→/app
   rebota a login. `web/.env.local` (gitignored) apunta al stack local.
+- **Incremento 3 HECHO — el web analiza de verdad.** (a) `api/supabase_auth.py`:
+  la FastAPI acepta el access token de Supabase como Bearer (dual auth en
+  `current_user`: JWT con 2 puntos → Supabase, opaco → authcore). Verificación
+  **offline** vía JWKS público (`/auth/v1/.well-known/jwks.json`, ES256 — lo
+  que firma el stack actual; fallback HS256 con `SUPABASE_JWT_SECRET` para
+  proyectos legacy). El rol NO se confía del token: se lee de `profiles` vía
+  PostgREST con la service key (cache 60 s); perfil inexistente = cuenta
+  borrada → 401 (revocación casi inmediata pese a JWTs stateless). Env:
+  `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`. (b) **Migración `0002`**:
+  grants explícitos de tabla — descubrimos que el stack local NO auto-otorga
+  select/insert/update/delete a los roles de API (solo llegaba Dxtm), así que
+  el service_role no podía leer profiles (42501, fallback silencioso a free) y
+  las políticas RLS de sets eran inutilizables. Con 0002: CRUD de sets como
+  owner verificado, role sigue intocable para el usuario (42501). (c) Suite
+  `tests/test_api_supabase.py` (PASS; SKIP limpio sin stack): admin-create →
+  login → /v1/me, firmas alteradas 401, flip de rol reflejado sin re-login,
+  pipeline analyze→job→playlist con el JWT, delete usuario → token muerto.
+  Las suites previas siguen PASS. (d) **Módulo Analyze en el web**
+  (`/app/analyze`): drag&drop + browse, límites del plan visibles, profundidad
+  60/180/300 s, upload multipart a `/v1/analyze` con el token de Supabase,
+  polling con barra (progress/total + cache hits), y al terminar: métricas del
+  set, curva de energía SVG, tabla con chips Camelot (mismo mapeo de hue que
+  la rueda), exports CSV/M3U libres y rekordbox/serato/traktor con candado
+  "· Pro" → pricing para free. Errores con cara: 403 plan (CTA upgrade), 429,
+  API caída. `web/lib/api.ts` (cliente tipado, `NEXT_PUBLIC_API_URL`),
+  `WorkspaceNav` compartido, card Analyze del workspace ahora "Live".
+  **E2E verificado en navegador con ambos roles** (pro: exports abiertos;
+  free: hint de 50 tracks + candados; cache por hash: 2.º análisis instantáneo).
+  Correr: API `SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... uvicorn
+  api.main:app --port 8000` + `cd web && npm run dev`.
 - **Para producción**: crear el proyecto Supabase cloud y poner sus llaves en
   `web/.env.local` / Vercel — el mismo código funciona sin cambios; correr
-  `npx supabase db push` para aplicar la migración al cloud.
-- **Siguiente incremento (3)**: la FastAPI valida el JWT de Supabase y lee el
-  rol de `profiles`; luego el módulo Analyze en el web consumiendo la API.
+  `npx supabase db push` para aplicar **ambas** migraciones (0001+0002) al
+  cloud y verificar con una lectura PostgREST usando la service key (la web
+  lee como authenticated y no destapa huecos de grants del service_role).
+- **Siguiente incremento (4)**: persistir sets en Supabase (`sets` ya tiene
+  grants+RLS listos) + módulo Set builder en el web (reorder, start track,
+  energy curve gated); luego Insights/Inspector/Discover.
 
 ## Hecho recientemente (API / producción)
 - **Endurecimiento de la API para SaaS** (`api/main.py`): CORS con orígenes
