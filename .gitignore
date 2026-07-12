@@ -16,3 +16,4 @@ Final analyzis/
 
 # License cache lives in ~/.track_analyzer/, not here — listed defensively
 license.json
+supabase/.temp/

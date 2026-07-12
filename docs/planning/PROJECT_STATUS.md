@@ -27,8 +27,21 @@
   (no nuestras sesiones authcore) — trae verificación de email, reset, sesiones
   SSR y social gratis; la FastAPI validará el JWT de Supabase y leerá el rol de
   una tabla `profiles`. Entitlements siguen siendo la fuente única.
-- **BLOQUEADO en el usuario para el incremento 2**: crear el proyecto Supabase
-  y dar `NEXT_PUBLIC_SUPABASE_URL`, anon key, service role key y JWT secret.
+- **Incremento 2 HECHO con Supabase LOCAL** (`npx supabase start`, Docker):
+  migración `0001` (profiles con rol + trigger de signup + lockdown por
+  columnas — el usuario NO puede auto-subirse el rol, verificado con 42501 —,
+  sets con RLS owner, feature_cache service-only), clientes `@supabase/ssr`
+  (browser/server), **`proxy.ts`** (Next 16 renombró middleware→proxy) con
+  refresh de sesión + guardas de ruta, páginas `/login` `/signup` `/reset`,
+  shell `/app` (server component: gate + nombre + plan desde profiles) y
+  signout. **E2E verificado en navegador**: signup→trigger crea perfil free→
+  /app muestra plan→rol a pro via SQL→UI refleja "unlimited"→signout→/app
+  rebota a login. `web/.env.local` (gitignored) apunta al stack local.
+- **Para producción**: crear el proyecto Supabase cloud y poner sus llaves en
+  `web/.env.local` / Vercel — el mismo código funciona sin cambios; correr
+  `npx supabase db push` para aplicar la migración al cloud.
+- **Siguiente incremento (3)**: la FastAPI valida el JWT de Supabase y lee el
+  rol de `profiles`; luego el módulo Analyze en el web consumiendo la API.
 
 ## Hecho recientemente (API / producción)
 - **Endurecimiento de la API para SaaS** (`api/main.py`): CORS con orígenes
