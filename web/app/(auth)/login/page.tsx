@@ -6,10 +6,20 @@ import { Suspense, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Field, FormError, NotConfigured, SubmitButton } from "@/components/auth/AuthBits";
 
+/** Only allow same-origin relative paths as a post-login destination:
+ *  "//evil.com" (protocol-relative) and "/\evil.com" (backslash-normalized)
+ *  are classic open-redirect vectors. Anything suspicious falls back to /app. */
+function safeNext(raw: string | null): string {
+  if (raw && raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/\\")) {
+    return raw;
+  }
+  return "/app";
+}
+
 function LoginForm() {
   const supabase = createClient();
   const router = useRouter();
-  const next = useSearchParams().get("next") || "/app";
+  const next = safeNext(useSearchParams().get("next"));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
