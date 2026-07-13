@@ -110,9 +110,13 @@
   cross-link "Open this set in the builder". E2E en navegador con un set
   demo de 4 tracks (9A/8A/6A/5A): rueda con 4 segmentos encendidos, heatmap
   con los pares adyacentes brillantes.
-- **Siguiente incremento (6)**: módulo **Inspector** en el web (corrección
-  de key/BPM sobre un set guardado — necesita `PUT /v1/sets/{id}` con
-  override de features + re-score) y **Discover** (sugerencias vía
+- **Siguiente incremento (6)**: part 1 **HECHO** — `PUT /v1/sets/{id}`
+  acepta `overrides` (title → key/bpm) que parchean los features
+  guardados con recompute de Camelot vía `key_to_camelot` del motor;
+  validación 400 para title desconocido / key inválida / bpm ≤ 0;
+  se aplican antes de order/rebuild; suite de integración ahora 13
+  grupos PASS. Queda: módulo **Inspector** en el web (UI de corrección
+  de key/BPM sobre un set guardado) y **Discover** (sugerencias vía
   `track_suggest.py` expuesto en la API, gated a Pro).
 
 ## Hecho recientemente (API / producción)
