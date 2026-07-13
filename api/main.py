@@ -48,6 +48,7 @@ from harmonic_playlist import (
     build_m3u_content,
     key_to_camelot,
 )
+from track_suggest import find_similar
 
 logger = logging.getLogger("keyflow.api")
 
@@ -691,6 +692,28 @@ def api_set_matrix(set_id: str, user: dict = Depends(current_user)):
     matrix = [[None if frame.iloc[i, j] is None else float(frame.iloc[i, j])
                for j in range(len(titles))] for i in range(len(titles))]
     return {"titles": titles, "matrix": matrix}
+
+
+@app.get("/v1/sets/{set_id}/suggestions")
+def api_set_suggestions(set_id: str, title: str, user: dict = Depends(current_user)):
+    """Similar-track discovery for one track in a saved set (Pro / Discover).
+
+    Providers (Last.fm, ListenBrainz, GetSongBPM) degrade to an empty list when
+    unconfigured or unreachable — never a 5xx.
+    """
+    row = _get_set_row(set_id, user)
+    if not _cap(user, "discover"):
+        raise HTTPException(403, "Similar-track discovery is a Pro feature.")
+    seed = next((t for t in row["playlist"]["tracks"] if t.get("title") == title), None)
+    if seed is None:
+        raise HTTPException(400, f"Unknown track title: {title}")
+    # find_similar already scores each hit with suggestion_compatibility.
+    suggestions, _note = find_similar(
+        seed,
+        lastfm_key=_env("TA_LASTFM_API_KEY"),
+        getsongbpm_key=_env("TA_GETSONGBPM_KEY"),
+    )
+    return {"suggestions": suggestions}
 
 
 @app.delete("/v1/sets/{set_id}")

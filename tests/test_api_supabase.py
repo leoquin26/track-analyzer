@@ -280,16 +280,48 @@ assert client.put(
 ).status_code == 400
 print("11. override key/bpm -> camelot+score; unknown/bad-key/bpm 400 OK")
 
-# 12. rename + delete
+# 12. Discover suggestions: Pro-gated; free 403; pro 200 (lista, posiblemente
+#     vacía sin API keys); título desconocido 400
+seed_title = detail["playlist"][0]["title"]
+r = httpx.patch(f"{SUPABASE_URL}/rest/v1/profiles", params={"id": f"eq.{uid}"},
+                headers={**_SVC_HEADERS, "Content-Type": "application/json"},
+                json={"role": "free"}, timeout=10)
+assert r.status_code in (200, 204), r.text
+supabase_auth._role_cache.clear()
+assert client.get(
+    f"/v1/sets/{set_id}/suggestions",
+    params={"title": seed_title},
+    headers=H,
+).status_code == 403
+r = httpx.patch(f"{SUPABASE_URL}/rest/v1/profiles", params={"id": f"eq.{uid}"},
+                headers={**_SVC_HEADERS, "Content-Type": "application/json"},
+                json={"role": "pro"}, timeout=10)
+assert r.status_code in (200, 204), r.text
+supabase_auth._role_cache.clear()
+r = client.get(
+    f"/v1/sets/{set_id}/suggestions",
+    params={"title": seed_title},
+    headers=H,
+)
+assert r.status_code == 200, r.text
+assert isinstance(r.json().get("suggestions"), list)  # no assert non-empty
+assert client.get(
+    f"/v1/sets/{set_id}/suggestions",
+    params={"title": "no-such-track.wav"},
+    headers=H,
+).status_code == 400
+print("12. suggestions: free 403; pro 200 lista; unknown title 400 OK")
+
+# 13. rename + delete
 r = client.put(f"/v1/sets/{set_id}", json={"name": "Peak hour"}, headers=H)
 assert r.status_code == 200 and r.json()["name"] == "Peak hour"
 r = client.delete(f"/v1/sets/{set_id}", headers=H)
 assert r.status_code == 200 and r.json()["ok"] is True
 assert client.get(f"/v1/sets/{set_id}", headers=H).status_code == 404
 assert client.get("/v1/sets", headers=H).json()["sets"] == []
-print("12. rename + delete -> set fuera de la lista OK")
+print("13. rename + delete -> set fuera de la lista OK")
 
-# 13. limpieza: borrar usuarios cascada perfiles y sets
+# 14. limpieza: borrar usuarios cascada perfiles y sets
 for cleanup_id in (uid, intruder_id):
     r = httpx.delete(f"{SUPABASE_URL}/auth/v1/admin/users/{cleanup_id}",
                      headers=_SVC_HEADERS, timeout=10)
@@ -299,6 +331,6 @@ r = httpx.get(f"{SUPABASE_URL}/rest/v1/profiles", params={"id": f"eq.{uid}"},
 assert r.json() == []
 supabase_auth._role_cache.clear()
 assert client.get("/v1/me", headers=H).status_code == 401  # usuario borrado -> anónimo
-print("13. delete usuarios -> perfiles cascados y token muerto OK")
+print("14. delete usuarios -> perfiles cascados y token muerto OK")
 
 print("RESULT: PASS")
