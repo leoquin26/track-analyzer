@@ -46,6 +46,7 @@ from harmonic_playlist import (
     build_playlist_dataframe,
     build_transition_matrix,
     build_m3u_content,
+    key_to_camelot,
 )
 
 logger = logging.getLogger("keyflow.api")
@@ -490,10 +491,18 @@ class SetRebuild(BaseModel):
     exclude_titles: list[str] = []
 
 
+class TrackOverride(BaseModel):
+    """Manual key/BPM correction (Inspector) — same fields as Streamlit override."""
+    key: str | None = None
+    bpm: float | None = None
+
+
 class SetUpdate(BaseModel):
     name: str | None = None
     order: list[str] | None = None  # manual reorder (permutation of the set)
     rebuild: SetRebuild | None = None  # or re-run the greedy build
+    # title → {key?, bpm?} patches stored features; camelot recomputed from key
+    overrides: dict[str, TrackOverride] | None = None
 
 
 def _require_supabase_user(user: dict) -> str:
@@ -521,6 +530,29 @@ def _hydrate_tracks(stored: list[dict]) -> list[dict]:
 def _in_saved_order(tracks: list[dict], order: list[str]) -> list[dict]:
     by_title = {t["title"]: t for t in tracks}
     return [by_title[title] for title in order if title in by_title]
+
+
+def _apply_overrides(
+    playlist_doc: dict, overrides: dict[str, TrackOverride]
+) -> dict:
+    """Patch key/BPM on stored tracks (mirrors ui.state.override_track)."""
+    tracks = [dict(t) for t in playlist_doc["tracks"]]
+    by_title = {t["title"]: t for t in tracks}
+    for title, ov in overrides.items():
+        track = by_title.get(title)
+        if track is None:
+            raise HTTPException(400, f"Unknown track title: {title}")
+        if ov.key is not None:
+            camelot = key_to_camelot(ov.key)
+            if camelot is None:
+                raise HTTPException(400, f"Invalid key: {ov.key}")
+            track["key"] = ov.key
+            track["camelot"] = camelot
+        if ov.bpm is not None:
+            if ov.bpm <= 0:
+                raise HTTPException(400, "bpm must be greater than 0.")
+            track["bpm"] = round(float(ov.bpm), 2)
+    return {**playlist_doc, "tracks": tracks}
 
 
 def _sets_store():
@@ -610,6 +642,11 @@ def api_set_update(set_id: str, body: SetUpdate, user: dict = Depends(current_us
 
     if body.name is not None:
         fields["name"] = _clean_set_name(body.name)
+
+    # Overrides first so order/rebuild score against the corrected features.
+    if body.overrides is not None:
+        playlist_doc = _apply_overrides(playlist_doc, body.overrides)
+        fields["playlist"] = playlist_doc
 
     if body.order is not None:
         if sorted(body.order) != sorted(playlist_doc["order"]):

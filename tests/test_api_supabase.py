@@ -237,16 +237,59 @@ assert client.get(f"/v1/sets/{set_id}/matrix",
                   headers=intruder_h).status_code == 404
 print("10. matriz de compatibilidad N×N con diagonal null OK")
 
-# 11. rename + delete
+# 11. override key/bpm (Inspector): camelot recomputado, score adyacente cambia;
+#     título desconocido y key inválida -> 400
+from harmonic_playlist import key_to_camelot  # noqa: E402
+
+detail_before = client.get(f"/v1/sets/{set_id}", headers=H).json()
+# Segunda pista: tiene transition_score_from_previous (la primera es NaN)
+row_before = detail_before["playlist"][1]
+title = row_before["title"]
+old_score = row_before["transition_score_from_previous"]
+# Clave lejana en la rueda respecto a lo que haya; BPM lejos del original
+new_key = "B" if row_before.get("camelot") != "1B" else "Am"
+assert key_to_camelot(new_key) is not None
+new_bpm = 140.0 if float(row_before["bpm"]) != 140.0 else 95.0
+r = client.put(
+    f"/v1/sets/{set_id}",
+    json={"overrides": {title: {"key": new_key, "bpm": new_bpm}}},
+    headers=H,
+)
+assert r.status_code == 200, r.text
+detail = r.json()
+updated = next(row for row in detail["playlist"] if row["title"] == title)
+assert updated["key"] == new_key
+assert updated["camelot"] == key_to_camelot(new_key)
+assert float(updated["bpm"]) == new_bpm
+assert updated["transition_score_from_previous"] != old_score
+# validación
+assert client.put(
+    f"/v1/sets/{set_id}",
+    json={"overrides": {"no-such-track.wav": {"key": "Am"}}},
+    headers=H,
+).status_code == 400
+assert client.put(
+    f"/v1/sets/{set_id}",
+    json={"overrides": {title: {"key": "H#m"}}},
+    headers=H,
+).status_code == 400
+assert client.put(
+    f"/v1/sets/{set_id}",
+    json={"overrides": {title: {"bpm": 0}}},
+    headers=H,
+).status_code == 400
+print("11. override key/bpm -> camelot+score; unknown/bad-key/bpm 400 OK")
+
+# 12. rename + delete
 r = client.put(f"/v1/sets/{set_id}", json={"name": "Peak hour"}, headers=H)
 assert r.status_code == 200 and r.json()["name"] == "Peak hour"
 r = client.delete(f"/v1/sets/{set_id}", headers=H)
 assert r.status_code == 200 and r.json()["ok"] is True
 assert client.get(f"/v1/sets/{set_id}", headers=H).status_code == 404
 assert client.get("/v1/sets", headers=H).json()["sets"] == []
-print("11. rename + delete -> set fuera de la lista OK")
+print("12. rename + delete -> set fuera de la lista OK")
 
-# 12. limpieza: borrar usuarios cascada perfiles y sets
+# 13. limpieza: borrar usuarios cascada perfiles y sets
 for cleanup_id in (uid, intruder_id):
     r = httpx.delete(f"{SUPABASE_URL}/auth/v1/admin/users/{cleanup_id}",
                      headers=_SVC_HEADERS, timeout=10)
@@ -256,6 +299,6 @@ r = httpx.get(f"{SUPABASE_URL}/rest/v1/profiles", params={"id": f"eq.{uid}"},
 assert r.json() == []
 supabase_auth._role_cache.clear()
 assert client.get("/v1/me", headers=H).status_code == 401  # usuario borrado -> anónimo
-print("12. delete usuarios -> perfiles cascados y token muerto OK")
+print("13. delete usuarios -> perfiles cascados y token muerto OK")
 
 print("RESULT: PASS")
