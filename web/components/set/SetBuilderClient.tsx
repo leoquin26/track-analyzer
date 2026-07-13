@@ -111,6 +111,11 @@ export default function SetBuilderClient({ setId, role }: { setId: string; role:
     });
   }
 
+  /** Inspector-style key/BPM correction — server recomputes camelot + scores. */
+  function overrideTrack(title: string, patch: { key: string; bpm: number }) {
+    void put({ overrides: { [title]: { key: patch.key, bpm: patch.bpm } } });
+  }
+
   async function destroy() {
     if (!confirmDelete) {
       setConfirmDelete(true);
@@ -329,7 +334,12 @@ export default function SetBuilderClient({ setId, role }: { setId: string; role:
       </div>
 
       <div className="mt-6">
-        <PlaylistTable rows={detail.playlist} onMove={move} busy={busy} />
+        <PlaylistTable
+          rows={detail.playlist}
+          onMove={move}
+          onOverride={overrideTrack}
+          busy={busy}
+        />
       </div>
 
       <div className="mt-6">

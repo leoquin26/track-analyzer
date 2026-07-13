@@ -4,6 +4,7 @@
 // the Set builder (saved sets). One source of truth for how a set looks.
 
 import Link from "next/link";
+import { useState } from "react";
 import type { PlaylistRow } from "@/lib/api";
 import type { Role } from "@/lib/entitlements";
 
@@ -13,6 +14,56 @@ export function camelotColor(code: string): string {
   if (!Number.isFinite(num)) return "var(--color-mint)";
   const hue = ((num - 1) / 12) * 360;
   return `hsl(${hue.toFixed(0)} 62% ${code.toUpperCase().endsWith("B") ? 64 : 54}%)`;
+}
+
+/**
+ * Valid musical keys accepted by the engine's `key_to_camelot`.
+ * Mirrors Streamlit `KEY_OPTIONS` = CAMELOT_MAJOR.keys() + CAMELOT_MINOR.keys().
+ */
+export const KEY_OPTIONS = [
+  "B",
+  "F#",
+  "C#",
+  "G#",
+  "D#",
+  "A#",
+  "F",
+  "C",
+  "G",
+  "D",
+  "A",
+  "E",
+  "G#m",
+  "D#m",
+  "A#m",
+  "Fm",
+  "Cm",
+  "Gm",
+  "Dm",
+  "Am",
+  "Em",
+  "Bm",
+  "F#m",
+  "C#m",
+] as const;
+
+/** Hairline pencil — matches the rename control in SetBuilderClient. */
+function PencilIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
 }
 
 export const EXPORT_FORMATS: [string, string, string, boolean][] = [
@@ -96,13 +147,42 @@ export function MetricChips({ rows }: { rows: PlaylistRow[] }) {
 export function PlaylistTable({
   rows,
   onMove,
+  onOverride,
   busy,
 }: {
   rows: PlaylistRow[];
   /** When given, each row grows ▲▼ controls; (index, -1 | 1) → new order. */
   onMove?: (index: number, delta: -1 | 1) => void;
+  /**
+   * When given, each row gets a "Fix key/BPM" pencil that opens an inline
+   * editor. Caller should PUT overrides and absorb the re-scored detail.
+   */
+  onOverride?: (title: string, patch: { key: string; bpm: number }) => void;
   busy?: boolean;
 }) {
+  // title of the row currently being edited, or null
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draftKey, setDraftKey] = useState("");
+  const [draftBpm, setDraftBpm] = useState("");
+
+  function openEdit(row: PlaylistRow) {
+    setEditing(row.title);
+    setDraftKey(KEY_OPTIONS.includes(row.key as (typeof KEY_OPTIONS)[number]) ? row.key : KEY_OPTIONS[0]);
+    setDraftBpm(String(row.bpm));
+  }
+
+  function cancelEdit() {
+    setEditing(null);
+  }
+
+  function saveEdit(title: string) {
+    if (!onOverride) return;
+    const bpm = Number(draftBpm);
+    if (!Number.isFinite(bpm) || bpm <= 0) return;
+    onOverride(title, { key: draftKey, bpm });
+    setEditing(null);
+  }
+
   return (
     <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
       <table className="w-full min-w-[640px] text-left text-sm">
@@ -118,54 +198,138 @@ export function PlaylistTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => (
-            <tr key={row.order} className="border-b border-line/60 last:border-0">
-              <td className="px-4 py-3 font-mono text-[color:var(--faint)]">{row.order}</td>
-              <td className="max-w-[280px] truncate px-4 py-3 font-medium">{row.title}</td>
-              <td className="px-4 py-3">
-                <span
-                  className="inline-block rounded-full border px-2.5 py-0.5 font-mono text-xs font-semibold"
-                  style={{ color: camelotColor(row.camelot), borderColor: "var(--color-line)" }}
-                >
-                  {row.camelot}
-                </span>
-                <span className="ml-2 text-xs text-[color:var(--muted)]">{row.key}</span>
-              </td>
-              <td className="px-4 py-3 font-mono">{row.bpm.toFixed(1)}</td>
-              <td className="px-4 py-3 font-mono text-[color:var(--muted)]">
-                {row.energy.toFixed(1)} dB
-              </td>
-              <td className="px-4 py-3 font-mono">
-                {row.transition_score_from_previous === null ? (
-                  <span className="text-[color:var(--faint)]">opener</span>
+          {rows.map((row, index) => {
+            const isEditing = onOverride && editing === row.title;
+            return (
+              <tr key={row.order} className="border-b border-line/60 last:border-0">
+                <td className="px-4 py-3 font-mono text-[color:var(--faint)]">{row.order}</td>
+                <td className="max-w-[280px] truncate px-4 py-3 font-medium">{row.title}</td>
+                {isEditing ? (
+                  <>
+                    <td className="px-4 py-3" colSpan={2}>
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          saveEdit(row.title);
+                        }}
+                        className="flex flex-wrap items-center gap-2"
+                      >
+                        <label className="flex items-center gap-1.5 text-xs text-[color:var(--muted)]">
+                          <span className="font-mono text-[0.65rem] uppercase tracking-[0.14em] text-[color:var(--faint)]">
+                            Key
+                          </span>
+                          <select
+                            value={draftKey}
+                            onChange={(e) => setDraftKey(e.target.value)}
+                            disabled={busy}
+                            className="rounded-full border border-mint/40 bg-surface-2 px-2.5 py-1 font-mono text-xs text-ink outline-none transition-colors focus:border-mint/70"
+                          >
+                            {KEY_OPTIONS.map((k) => (
+                              <option key={k} value={k}>
+                                {k}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-[color:var(--muted)]">
+                          <span className="font-mono text-[0.65rem] uppercase tracking-[0.14em] text-[color:var(--faint)]">
+                            BPM
+                          </span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={1}
+                            step={0.1}
+                            value={draftBpm}
+                            onChange={(e) => setDraftBpm(e.target.value)}
+                            disabled={busy}
+                            className="w-20 rounded-full border border-mint/40 bg-surface-2 px-2.5 py-1 font-mono text-xs text-ink outline-none transition-colors focus:border-mint/70"
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={busy}
+                          className="rounded-full border border-mint/40 bg-mint/10 px-3 py-1 text-xs font-semibold text-mint transition-colors hover:bg-mint/20 disabled:opacity-40"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          disabled={busy}
+                          className="rounded-full border border-line bg-surface-2 px-3 py-1 text-xs font-semibold text-[color:var(--muted)] transition-colors hover:border-line hover:text-ink disabled:opacity-40"
+                        >
+                          Cancel
+                        </button>
+                      </form>
+                    </td>
+                  </>
                 ) : (
-                  row.transition_score_from_previous.toFixed(1)
+                  <>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span
+                          className="inline-block rounded-full border px-2.5 py-0.5 font-mono text-xs font-semibold"
+                          style={{
+                            color: camelotColor(row.camelot),
+                            borderColor: "var(--color-line)",
+                          }}
+                        >
+                          {row.camelot}
+                        </span>
+                        <span className="text-xs text-[color:var(--muted)]">{row.key}</span>
+                        {onOverride && (
+                          <button
+                            type="button"
+                            onClick={() => openEdit(row)}
+                            disabled={busy}
+                            aria-label={`Fix key and BPM for ${row.title}`}
+                            title="Fix key / BPM"
+                            className="ml-0.5 text-[color:var(--faint)] transition-colors hover:text-mint disabled:opacity-40"
+                          >
+                            <PencilIcon />
+                          </button>
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-mono">{row.bpm.toFixed(1)}</td>
+                  </>
                 )}
-              </td>
-              {onMove && (
-                <td className="px-4 py-3">
-                  <span className="flex gap-1">
-                    <button
-                      onClick={() => onMove(index, -1)}
-                      disabled={busy || index === 0}
-                      aria-label={`Move ${row.title} earlier`}
-                      className="rounded-md border border-line bg-surface-2 px-2 py-0.5 font-mono text-xs transition-colors hover:border-mint/50 disabled:cursor-not-allowed disabled:opacity-30"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      onClick={() => onMove(index, 1)}
-                      disabled={busy || index === rows.length - 1}
-                      aria-label={`Move ${row.title} later`}
-                      className="rounded-md border border-line bg-surface-2 px-2 py-0.5 font-mono text-xs transition-colors hover:border-mint/50 disabled:cursor-not-allowed disabled:opacity-30"
-                    >
-                      ▼
-                    </button>
-                  </span>
+                <td className="px-4 py-3 font-mono text-[color:var(--muted)]">
+                  {row.energy.toFixed(1)} dB
                 </td>
-              )}
-            </tr>
-          ))}
+                <td className="px-4 py-3 font-mono">
+                  {row.transition_score_from_previous === null ? (
+                    <span className="text-[color:var(--faint)]">opener</span>
+                  ) : (
+                    row.transition_score_from_previous.toFixed(1)
+                  )}
+                </td>
+                {onMove && (
+                  <td className="px-4 py-3">
+                    <span className="flex gap-1">
+                      <button
+                        onClick={() => onMove(index, -1)}
+                        disabled={busy || index === 0 || !!editing}
+                        aria-label={`Move ${row.title} earlier`}
+                        className="rounded-md border border-line bg-surface-2 px-2 py-0.5 font-mono text-xs transition-colors hover:border-mint/50 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        onClick={() => onMove(index, 1)}
+                        disabled={busy || index === rows.length - 1 || !!editing}
+                        aria-label={`Move ${row.title} later`}
+                        className="rounded-md border border-line bg-surface-2 px-2 py-0.5 font-mono text-xs transition-colors hover:border-mint/50 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        ▼
+                      </button>
+                    </span>
+                  </td>
+                )}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
