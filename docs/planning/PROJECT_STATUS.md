@@ -115,8 +115,11 @@
   guardados con recompute de Camelot vía `key_to_camelot` del motor;
   validación 400 para title desconocido / key inválida / bpm ≤ 0;
   se aplican antes de order/rebuild; suite de integración ahora 13
-  grupos PASS. Queda: módulo **Inspector** en el web (UI de corrección
-  de key/BPM sobre un set guardado) y **Discover** (sugerencias vía
+  grupos PASS. Part 2 **HECHO** — el Set builder web ya tiene
+  corrección inline de key/BPM: lápiz junto al chip de key → select
+  con las 24 keys aceptadas del motor + input de BPM, guardado vía
+  `PUT /v1/sets/{id}` `overrides` (camelot y scores se re-calculan
+  server-side). Queda: **Discover** (sugerencias vía
   `track_suggest.py` expuesto en la API, gated a Pro).
 
 ## Hecho recientemente (API / producción)
